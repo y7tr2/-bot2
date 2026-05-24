@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: discord-gen-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node keep_alive.js & node index.js
