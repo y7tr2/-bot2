@@ -7,6 +7,7 @@ import { infoCommands } from "./info";
 import { funCommands } from "./fun";
 import { adminCommands } from "./admin";
 import { bloxpinCommands } from "./bloxpin";
+import { ticketCommands } from "./ticket";
 
 export type { Command };
 
@@ -19,6 +20,7 @@ export function loadCommands(collection: Collection<string, Command>): Command[]
     ...funCommands,
     ...adminCommands,
     ...bloxpinCommands,
+    ...ticketCommands,
   ];
   for (const cmd of all) {
     collection.set(cmd.data.name, cmd);

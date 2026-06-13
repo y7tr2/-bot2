@@ -1,3 +1,10 @@
+export interface TicketData {
+  userId: string;
+  number: number;
+  claimedBy: string | null;
+  createdAt: number;
+}
+
 export interface GuildConfig {
   respectLevel: number;
   aiChannelId: string | null;
@@ -7,6 +14,12 @@ export interface GuildConfig {
   goodbyeChannelId: string | null;
   goodbyeMessage: string;
   warnings: Map<string, string[]>;
+  // Ticket system
+  supportRoleId: string | null;
+  ticketCategoryId: string | null;
+  ticketLogChannelId: string | null;
+  ticketCount: number;
+  openTickets: Map<string, TicketData>;
 }
 
 const configs = new Map<string, GuildConfig>();
@@ -22,14 +35,18 @@ export function getConfig(guildId: string): GuildConfig {
       goodbyeChannelId: null,
       goodbyeMessage: "وداعاً {user}، نتمنى لك التوفيق. 👋",
       warnings: new Map(),
+      supportRoleId: null,
+      ticketCategoryId: null,
+      ticketLogChannelId: null,
+      ticketCount: 0,
+      openTickets: new Map(),
     });
   }
   return configs.get(guildId)!;
 }
 
 export function setRespectLevel(guildId: string, level: number): void {
-  const cfg = getConfig(guildId);
-  cfg.respectLevel = Math.min(5, Math.max(1, level));
+  getConfig(guildId).respectLevel = Math.min(5, Math.max(1, level));
 }
 
 export function setAiChannel(guildId: string, channelId: string | null): void {

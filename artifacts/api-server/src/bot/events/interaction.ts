@@ -1,6 +1,7 @@
 import type { Interaction, Collection } from "discord.js";
 import type { Command } from "../commands/types";
 import { handleBloxpinButton } from "../commands/bloxpin";
+import { handleTicketButton } from "../commands/ticket";
 import { logger } from "../../lib/logger";
 
 export async function onInteractionCreate(
@@ -8,15 +9,20 @@ export async function onInteractionCreate(
   commands: Collection<string, Command>,
 ): Promise<void> {
   if (interaction.isButton()) {
-    if (interaction.customId.startsWith("bloxpin_")) {
-      try {
+    const { customId } = interaction;
+    try {
+      if (customId.startsWith("bloxpin_")) {
         await handleBloxpinButton(interaction);
-      } catch (err) {
-        logger.error({ err, customId: interaction.customId }, "Button handler error");
-        try {
-          await interaction.reply({ content: "⚠️ حدث خطأ.", ephemeral: true });
-        } catch { /* ignore */ }
+      } else if (customId.startsWith("ticket_")) {
+        await handleTicketButton(interaction);
       }
+    } catch (err) {
+      logger.error({ err, customId }, "Button handler error");
+      try {
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({ content: "⚠️ حدث خطأ.", ephemeral: true });
+        }
+      } catch { /* ignore */ }
     }
     return;
   }
