@@ -172,7 +172,7 @@ const maker: Command = {
       .setThumbnail(interaction.client.user.displayAvatarURL({ size: 256 }))
       .setDescription("بوت ديسكورد متكامل بالذكاء الاصطناعي • 50 أمر • مناسب للشريعة الإسلامية")
       .addFields(
-        { name: "🛠️ المطور", value: "مصنوع بـ Replit Agent", inline: true },
+        { name: "🛠️ المطور", value: "y.7tr2", inline: true },
         { name: "⚙️ المكتبة", value: "discord.js v14", inline: true },
         { name: "🤖 الذكاء الاصطناعي", value: "OpenAI GPT-4o-mini", inline: true },
         { name: "🌐 السيرفرات", value: `${interaction.client.guilds.cache.size}`, inline: true },
