@@ -10,85 +10,85 @@ const SYSTEM_PROMPTS: Record<number, string> = {
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
-const FALLBACK_MODELS = ["openai-large", "openai", "mistral", "llama"];
+async function callGitHubModels(messages: Message[]): Promise<string> {
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) throw new Error("no github token");
+  const res = await fetch("https://models.inference.ai.azure.com/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({ model: "gpt-4o-mini", messages, max_tokens: 1024 }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`github models ${res.status}`);
+  const data = await res.json() as { choices?: { message?: { content?: string } }[] };
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text.trim()) throw new Error("empty");
+  return text.trim();
+}
+
+async function callPollinations(messages: Message[]): Promise<string> {
+  for (const model of ["openai-large", "mistral", "llama"]) {
+    try {
+      const res = await fetch("https://text.pollinations.ai/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages, model, seed: Math.floor(Math.random() * 99999) }),
+        signal: AbortSignal.timeout(18_000),
+      });
+      if (res.ok) {
+        const text = await res.text();
+        if (text.trim().length > 3) return text.trim();
+      }
+    } catch {}
+  }
+  throw new Error("pollinations failed");
+}
 
 async function callAI(messages: Message[]): Promise<string> {
-  for (const model of FALLBACK_MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const res = await fetch("https://text.pollinations.ai/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            messages,
-            model,
-            seed: Math.floor(Math.random() * 99999),
-          }),
-          signal: AbortSignal.timeout(18_000),
-        });
-        if (res.ok) {
-          const text = await res.text();
-          if (text.trim().length > 3) return text.trim();
-        }
-      } catch {}
-      await new Promise(r => setTimeout(r, 500));
-    }
-  }
-
-  // GET fallback using last user message
   try {
-    const userMsg = [...messages].reverse().find(m => m.role === "user")?.content ?? "";
-    const sysMsg = messages.find(m => m.role === "system")?.content ?? "";
-    const url = `https://text.pollinations.ai/${encodeURIComponent(userMsg)}?system=${encodeURIComponent(sysMsg)}&model=openai`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-    if (res.ok) {
-      const text = await res.text();
-      if (text.trim().length > 3) return text.trim();
-    }
+    return await callGitHubModels(messages);
   } catch {}
-
+  try {
+    return await callPollinations(messages);
+  } catch {}
   return "⚠️ الخدمة مشغولة، حاول مجدداً.";
 }
 
-export async function askAI(
-  question: string,
-  respectLevel: number,
-  botName: string,
-): Promise<string> {
+export async function askAI(question: string, respectLevel: number, botName: string): Promise<string> {
   const level = Math.min(5, Math.max(1, respectLevel));
   const system = SYSTEM_PROMPTS[level].replace("{{bot}}", botName);
-  return callAI([
-    { role: "system", content: system },
-    { role: "user", content: question },
-  ]);
+  return callAI([{ role: "system", content: system }, { role: "user", content: question }]);
 }
 
 export async function summarizeText(text: string): Promise<string> {
   return callAI([
     { role: "system", content: "لخّص النص التالي بإيجاز بالعربية." },
     { role: "user", content: text },
-  ], 512);
+  ]);
 }
 
 export async function translateText(text: string, lang: string): Promise<string> {
   return callAI([
     { role: "system", content: `ترجم النص التالي إلى ${lang}. أعط الترجمة فقط بدون شرح.` },
     { role: "user", content: text },
-  ], 512);
+  ]);
 }
 
 export async function explainTopic(topic: string): Promise<string> {
   return callAI([
     { role: "system", content: "اشرح الموضوع التالي بأسلوب بسيط ومفيد بالعربية." },
     { role: "user", content: topic },
-  ], 800);
+  ]);
 }
 
 export async function correctText(text: string): Promise<string> {
   return callAI([
     { role: "system", content: "صحّح الأخطاء الإملائية والنحوية في النص التالي وأعد النص المصحح فقط." },
     { role: "user", content: text },
-  ], 512);
+  ]);
 }
 
 export async function debateAI(topic: string, respectLevel: number, botName: string): Promise<string> {
@@ -97,19 +97,19 @@ export async function debateAI(topic: string, respectLevel: number, botName: str
   return callAI([
     { role: "system", content: system + " أنت تحب النقاش وتعطي رأيك بوضوح." },
     { role: "user", content: `ناقشني في موضوع: ${topic}` },
-  ], 800);
+  ]);
 }
 
 export async function generateStory(theme: string): Promise<string> {
   return callAI([
     { role: "system", content: "اكتب قصة قصيرة هادفة وملهمة بالعربية. القصة لا تتجاوز 200 كلمة." },
     { role: "user", content: `موضوع القصة: ${theme}` },
-  ], 600);
+  ]);
 }
 
 export async function generateDua(situation: string): Promise<string> {
   return callAI([
     { role: "system", content: "اذكر دعاءً مأثوراً أو مناسباً لهذا الموقف، مع ذكر المصدر إن وُجد." },
     { role: "user", content: `الموقف: ${situation}` },
-  ], 400);
+  ]);
 }
