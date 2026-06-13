@@ -1,12 +1,23 @@
 import type { GuildMember } from "discord.js";
 import { EmbedBuilder } from "discord.js";
 import { getConfig } from "../config";
+import { handleAntiRaid } from "../commands/protection";
 import { logger } from "../../lib/logger";
 
 export async function onGuildMemberAdd(member: GuildMember): Promise<void> {
   const cfg = getConfig(member.guild.id);
-  if (!cfg.welcomeChannelId) return;
 
+  // ── Anti-Raid ────────────────────────────────────────────────────────────
+  await handleAntiRaid(member).catch(() => {});
+
+  // ── Auto-Role ────────────────────────────────────────────────────────────
+  if (cfg.autoRoleId) {
+    const role = member.guild.roles.cache.get(cfg.autoRoleId);
+    if (role) await member.roles.add(role).catch(() => {});
+  }
+
+  // ── Welcome ──────────────────────────────────────────────────────────────
+  if (!cfg.welcomeChannelId) return;
   const channel = member.guild.channels.cache.get(cfg.welcomeChannelId) as any;
   if (!channel) return;
 
@@ -20,7 +31,10 @@ export async function onGuildMemberAdd(member: GuildMember): Promise<void> {
     .setTitle("👋 عضو جديد!")
     .setDescription(msg)
     .setThumbnail(member.user.displayAvatarURL({ size: 256 }))
-    .addFields({ name: "📅 انضم في", value: `<t:${Math.floor(Date.now() / 1000)}:R>` })
+    .addFields(
+      { name: "📅 انضم في", value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true },
+      { name: "👥 إجمالي الأعضاء", value: `${member.guild.memberCount}`, inline: true },
+    )
     .setTimestamp();
 
   try {

@@ -1,15 +1,58 @@
-import type { Message } from "discord.js";
+import type { Message, GuildMember } from "discord.js";
 import { EmbedBuilder } from "discord.js";
 import { getConfig } from "../config";
 import { askAI } from "../ai";
+import { handleAntiSpam, LINK_REGEX_EXPORT } from "../commands/protection";
 
 export async function onMessageCreate(message: Message): Promise<void> {
   if (message.author.bot) return;
   if (!message.guild) return;
 
   const cfg = getConfig(message.guild.id);
+  const p = cfg.protection;
+  const member = message.member as GuildMember;
+  const isWhitelisted = p.whitelist.has(message.author.id) ||
+    member?.roles.cache.some(r => p.whitelist.has(r.id));
 
-  // ── AFK check: if user sends a message, remove their AFK ──
+  // ── Anti-Spam ────────────────────────────────────────────────────────────
+  if (p.antiSpam && !isWhitelisted && member) {
+    const muted = await handleAntiSpam(member, message.channelId).catch(() => false);
+    if (muted) {
+      try { await message.delete(); } catch { /* ignore */ }
+      return;
+    }
+  }
+
+  // ── Anti-Link ────────────────────────────────────────────────────────────
+  if (p.antiLink && !isWhitelisted && LINK_REGEX_EXPORT.test(message.content)) {
+    try {
+      await message.delete();
+      const warn = await message.channel.send({
+        content: `⚠️ ${message.author} — الروابط غير مسموحة في هذا السيرفر!`,
+      });
+      setTimeout(() => warn.delete().catch(() => {}), 5000);
+    } catch { /* no perms */ }
+    return;
+  }
+
+  // ── Anti-Mention ─────────────────────────────────────────────────────────
+  if (p.antiMention && !isWhitelisted && member) {
+    const mentionCount = message.mentions.users.size + message.mentions.roles.size +
+      (message.mentions.everyone ? 1 : 0);
+    if (mentionCount >= p.antiMentionMax || message.mentions.everyone) {
+      try {
+        await message.delete();
+        await member.timeout(5 * 60 * 1000, "Anti-Mention: منشنات مفرطة");
+        const warn = await message.channel.send({
+          content: `⚠️ ${message.author} — تم كتمك بسبب المنشنات العشوائية!`,
+        });
+        setTimeout(() => warn.delete().catch(() => {}), 5000);
+      } catch { /* no perms */ }
+      return;
+    }
+  }
+
+  // ── AFK check: remove AFK if user sends message ──────────────────────────
   if (cfg.afkUsers.has(message.author.id)) {
     cfg.afkUsers.delete(message.author.id);
     try {
@@ -17,7 +60,7 @@ export async function onMessageCreate(message: Message): Promise<void> {
     } catch { /* ignore */ }
   }
 
-  // ── AFK check: if a mentioned user is AFK ──
+  // ── AFK check: notify if mentioned user is AFK ───────────────────────────
   for (const [, user] of message.mentions.users) {
     const reason = cfg.afkUsers.get(user.id);
     if (reason) {
@@ -28,7 +71,7 @@ export async function onMessageCreate(message: Message): Promise<void> {
     }
   }
 
-  // ── AI channel auto-respond ──
+  // ── AI channel auto-respond ───────────────────────────────────────────────
   if (cfg.aiChannelId && message.channelId === cfg.aiChannelId) {
     if (message.content.startsWith("/")) return;
     try {

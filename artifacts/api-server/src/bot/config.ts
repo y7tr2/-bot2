@@ -16,6 +16,30 @@ export interface GiveawayData {
   ended: boolean;
 }
 
+export interface StoreItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  roleId: string | null;
+  stock: number;
+  sold: number;
+}
+
+export interface ProtectionConfig {
+  antiSpam: boolean;
+  antiSpamMax: number;
+  antiSpamInterval: number;
+  antiRaid: boolean;
+  antiRaidMax: number;
+  antiRaidInterval: number;
+  antiLink: boolean;
+  antiMention: boolean;
+  antiMentionMax: number;
+  antiNuke: boolean;
+  whitelist: Set<string>;
+}
+
 export interface GuildConfig {
   respectLevel: number;
   aiChannelId: string | null;
@@ -25,17 +49,20 @@ export interface GuildConfig {
   goodbyeChannelId: string | null;
   goodbyeMessage: string;
   warnings: Map<string, string[]>;
-  // Ticket
   supportRoleId: string | null;
   ticketCategoryId: string | null;
   ticketLogChannelId: string | null;
   ticketCount: number;
   openTickets: Map<string, TicketData>;
-  // Utility
   autoRoleId: string | null;
   suggestChannelId: string | null;
   afkUsers: Map<string, string>;
   giveaways: Map<string, GiveawayData>;
+  protection: ProtectionConfig;
+  currency: Map<string, number>;
+  lastDaily: Map<string, number>;
+  storeItems: Map<string, StoreItem>;
+  dailyAmount: number;
 }
 
 const configs = new Map<string, GuildConfig>();
@@ -60,6 +87,23 @@ export function getConfig(guildId: string): GuildConfig {
       suggestChannelId: null,
       afkUsers: new Map(),
       giveaways: new Map(),
+      protection: {
+        antiSpam: false,
+        antiSpamMax: 5,
+        antiSpamInterval: 4,
+        antiRaid: false,
+        antiRaidMax: 8,
+        antiRaidInterval: 10,
+        antiLink: false,
+        antiMention: false,
+        antiMentionMax: 5,
+        antiNuke: false,
+        whitelist: new Set(),
+      },
+      currency: new Map(),
+      lastDaily: new Map(),
+      storeItems: new Map(),
+      dailyAmount: 100,
     });
   }
   return configs.get(guildId)!;
@@ -86,4 +130,14 @@ export function getWarnings(guildId: string, userId: string): string[] {
 }
 export function clearWarnings(guildId: string, userId: string): void {
   getConfig(guildId).warnings.delete(userId);
+}
+export function getBalance(guildId: string, userId: string): number {
+  return getConfig(guildId).currency.get(userId) ?? 0;
+}
+export function addBalance(guildId: string, userId: string, amount: number): number {
+  const cfg = getConfig(guildId);
+  const current = cfg.currency.get(userId) ?? 0;
+  const newVal = Math.max(0, current + amount);
+  cfg.currency.set(userId, newVal);
+  return newVal;
 }

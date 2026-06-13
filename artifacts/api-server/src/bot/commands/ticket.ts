@@ -361,7 +361,78 @@ const ticketList: Command = {
   },
 };
 
+// ── Ticket Panel (resend) ───────────────────────────────────────────────────
+const ticketPanel: Command = {
+  data: new SlashCommandBuilder()
+    .setName("ticket-panel")
+    .setDescription("📤 إعادة إرسال لوحة التذاكر")
+    .addChannelOption(o => o.setName("قناة").setDescription("القناة (افتراضي: الحالية)").setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  async execute(interaction) {
+    if (!interaction.guildId) return;
+    const target = (interaction.options.getChannel("قناة") ?? interaction.channel) as TextChannel;
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("🎫 نظام التذاكر")
+      .setDescription("لفتح تذكرة دعم، اضغط على الزر أدناه وسيتم إنشاء قناة خاصة بك فوراً.")
+      .setFooter({ text: interaction.guild?.name ?? "", iconURL: interaction.guild?.iconURL() ?? undefined })
+      .setTimestamp();
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("ticket_open").setLabel("🎫 فتح تذكرة").setStyle(ButtonStyle.Primary),
+    );
+    await target.send({ embeds: [embed], components: [row] });
+    await interaction.reply({ content: `✅ تم إرسال لوحة التذاكر في <#${target.id}>`, ephemeral: true });
+  },
+};
+
+// ── Ticket Stats ────────────────────────────────────────────────────────────
+const ticketStats: Command = {
+  data: new SlashCommandBuilder()
+    .setName("ticket-stats")
+    .setDescription("📊 إحصائيات نظام التذاكر")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  async execute(interaction) {
+    if (!interaction.guildId) return;
+    const cfg = getConfig(interaction.guildId);
+    const open = cfg.openTickets.size;
+    const total = cfg.ticketCount;
+    const claimed = [...cfg.openTickets.values()].filter(t => t.claimedBy).length;
+    const embed = new EmbedBuilder()
+      .setColor(0x5865f2)
+      .setTitle("📊 إحصائيات التذاكر")
+      .addFields(
+        { name: "🎫 إجمالي التذاكر", value: `${total}`, inline: true },
+        { name: "🟢 مفتوحة", value: `${open}`, inline: true },
+        { name: "🤝 مُستلَمة", value: `${claimed}`, inline: true },
+        { name: "✅ مغلقة", value: `${total - open}`, inline: true },
+        { name: "⏳ بانتظار دعم", value: `${open - claimed}`, inline: true },
+      )
+      .setTimestamp();
+    await interaction.reply({ embeds: [embed] });
+  },
+};
+
+// ── Ticket Rename ───────────────────────────────────────────────────────────
+const ticketRename: Command = {
+  data: new SlashCommandBuilder()
+    .setName("ticket-rename")
+    .setDescription("✏️ تغيير اسم قناة التذكرة الحالية")
+    .addStringOption(o => o.setName("اسم").setDescription("الاسم الجديد").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+  async execute(interaction) {
+    if (!interaction.guildId || !interaction.channel) return;
+    const cfg = getConfig(interaction.guildId);
+    if (!cfg.openTickets.has(interaction.channelId)) {
+      await interaction.reply({ content: "❌ هذه القناة ليست تذكرة.", ephemeral: true }); return;
+    }
+    const newName = interaction.options.getString("اسم", true).toLowerCase().replace(/\s+/g, "-");
+    await (interaction.channel as TextChannel).setName(`🎫-${newName}`);
+    await interaction.reply(`✅ تم تغيير اسم التذكرة إلى **🎫-${newName}**`);
+  },
+};
+
 export const ticketCommands: Command[] = [
   ticketSetup, ticketRole, ticketCategory, ticketLog,
   ticketClose, ticketAdd, ticketRemove, ticketList,
+  ticketPanel, ticketStats, ticketRename,
 ];
