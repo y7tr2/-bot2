@@ -1,6 +1,6 @@
 import { logger } from "../lib/logger";
 
-const PING_INTERVAL_MS = 14 * 60 * 1000;
+const PING_INTERVAL_MS = 3 * 60 * 1000;
 
 async function doPing(url: string): Promise<void> {
   try {
@@ -15,7 +15,7 @@ export function startSelfPing(renderUrl: string): void {
   const base = renderUrl.replace(/\/$/, "");
   const url = `${base}/api/ping`;
 
-  logger.info({ url, intervalMinutes: 14 }, "Self-ping started for Render");
+  logger.info({ url, intervalMinutes: 3 }, "Self-ping started for Render");
 
   doPing(url);
   setInterval(() => doPing(url), PING_INTERVAL_MS);
