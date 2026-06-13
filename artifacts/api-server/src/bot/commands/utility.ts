@@ -71,11 +71,11 @@ const slowmode: Command = {
   data: new SlashCommandBuilder()
     .setName("slowmode")
     .setDescription("🐢 تعيين وضع التباطؤ في القناة")
-    .addIntegerOption(o => o.setName("ثوانٍ").setDescription("المدة بالثوانٍ (0 للإيقاف، حتى 21600)").setRequired(true).setMinValue(0).setMaxValue(21600))
+    .addIntegerOption(o => o.setName("ثواني").setDescription("المدة بالثواني (0 للإيقاف، حتى 21600)").setRequired(true).setMinValue(0).setMaxValue(21600))
     .addChannelOption(o => o.setName("قناة").setDescription("القناة (افتراضياً: الحالية)").setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
   async execute(interaction) {
-    const secs = interaction.options.getInteger("ثوانٍ", true);
+    const secs = interaction.options.getInteger("ثواني", true);
     const ch = (interaction.options.getChannel("قناة") ?? interaction.channel) as TextChannel;
     await ch.setRateLimitPerUser(secs);
     await interaction.reply(secs === 0 ? `✅ تم إيقاف التباطؤ في <#${ch.id}>.` : `🐢 التباطؤ في <#${ch.id}>: **${secs}** ثانية.`);
