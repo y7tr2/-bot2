@@ -10,25 +10,44 @@ const SYSTEM_PROMPTS: Record<number, string> = {
 
 type Message = { role: "system" | "user" | "assistant"; content: string };
 
-async function callAI(messages: Message[], maxTokens = 1024): Promise<string> {
-  try {
-    const res = await fetch("https://text.pollinations.ai/", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        messages,
-        model: "openai-large",
-        seed: -1,
-        jsonMode: false,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    return text.trim() || "لم أستطع الرد، حاول مجدداً.";
-  } catch {
-    return "⚠️ تعذّر الاتصال، حاول بعد لحظة.";
+const FALLBACK_MODELS = ["openai-large", "openai", "mistral", "llama"];
+
+async function callAI(messages: Message[]): Promise<string> {
+  for (const model of FALLBACK_MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch("https://text.pollinations.ai/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages,
+            model,
+            seed: Math.floor(Math.random() * 99999),
+          }),
+          signal: AbortSignal.timeout(18_000),
+        });
+        if (res.ok) {
+          const text = await res.text();
+          if (text.trim().length > 3) return text.trim();
+        }
+      } catch {}
+      await new Promise(r => setTimeout(r, 500));
+    }
   }
+
+  // GET fallback using last user message
+  try {
+    const userMsg = [...messages].reverse().find(m => m.role === "user")?.content ?? "";
+    const sysMsg = messages.find(m => m.role === "system")?.content ?? "";
+    const url = `https://text.pollinations.ai/${encodeURIComponent(userMsg)}?system=${encodeURIComponent(sysMsg)}&model=openai`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+    if (res.ok) {
+      const text = await res.text();
+      if (text.trim().length > 3) return text.trim();
+    }
+  } catch {}
+
+  return "⚠️ الخدمة مشغولة، حاول مجدداً.";
 }
 
 export async function askAI(
