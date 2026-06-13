@@ -2,6 +2,7 @@ import type { Interaction, Collection } from "discord.js";
 import type { Command } from "../commands/types";
 import { handleBloxpinButton } from "../commands/bloxpin";
 import { handleTicketButton } from "../commands/ticket";
+import { handleGiveawayButton } from "../commands/utility";
 import { logger } from "../../lib/logger";
 
 export async function onInteractionCreate(
@@ -15,6 +16,8 @@ export async function onInteractionCreate(
         await handleBloxpinButton(interaction);
       } else if (customId.startsWith("ticket_")) {
         await handleTicketButton(interaction);
+      } else if (customId === "giveaway_enter") {
+        await handleGiveawayButton(interaction);
       }
     } catch (err) {
       logger.error({ err, customId }, "Button handler error");

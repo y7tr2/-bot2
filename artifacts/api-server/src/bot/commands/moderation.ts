@@ -192,6 +192,98 @@ const lock: Command = {
   },
 };
 
+const roleAdd: Command = {
+  data: new SlashCommandBuilder()
+    .setName("role-add")
+    .setDescription("🎭 إضافة رتبة لعضو")
+    .addUserOption(o => o.setName("عضو").setDescription("العضو").setRequired(true))
+    .addRoleOption(o => o.setName("رتبة").setDescription("الرتبة المراد إضافتها").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+  async execute(interaction) {
+    const target = interaction.options.getMember("عضو") as GuildMember | null;
+    const role = interaction.options.getRole("رتبة", true);
+    if (!target) { await interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true }); return; }
+    if (!interaction.guild) return;
+    const guildRole = interaction.guild.roles.cache.get(role.id);
+    if (!guildRole) { await interaction.reply({ content: "❌ الرتبة غير موجودة.", ephemeral: true }); return; }
+    await target.roles.add(guildRole);
+    await interaction.reply(`✅ تم إضافة رتبة <@&${role.id}> لـ ${target.user.tag}.`);
+  },
+};
+
+const roleRemove: Command = {
+  data: new SlashCommandBuilder()
+    .setName("role-remove")
+    .setDescription("🎭 إزالة رتبة من عضو")
+    .addUserOption(o => o.setName("عضو").setDescription("العضو").setRequired(true))
+    .addRoleOption(o => o.setName("رتبة").setDescription("الرتبة المراد إزالتها").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
+  async execute(interaction) {
+    const target = interaction.options.getMember("عضو") as GuildMember | null;
+    const role = interaction.options.getRole("رتبة", true);
+    if (!target) { await interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true }); return; }
+    if (!interaction.guild) return;
+    const guildRole = interaction.guild.roles.cache.get(role.id);
+    if (!guildRole) { await interaction.reply({ content: "❌ الرتبة غير موجودة.", ephemeral: true }); return; }
+    await target.roles.remove(guildRole);
+    await interaction.reply(`✅ تم إزالة رتبة <@&${role.id}> من ${target.user.tag}.`);
+  },
+};
+
+const nick: Command = {
+  data: new SlashCommandBuilder()
+    .setName("nick")
+    .setDescription("✏️ تغيير لقب عضو")
+    .addUserOption(o => o.setName("عضو").setDescription("العضو").setRequired(true))
+    .addStringOption(o => o.setName("لقب").setDescription("اللقب الجديد (اتركه فارغاً لإزالة اللقب)").setRequired(false))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageNicknames),
+  async execute(interaction) {
+    const target = interaction.options.getMember("عضو") as GuildMember | null;
+    const newNick = interaction.options.getString("لقب") ?? null;
+    if (!target) { await interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true }); return; }
+    if (!target.manageable) { await interaction.reply({ content: "❌ لا أستطيع تغيير لقب هذا العضو.", ephemeral: true }); return; }
+    await target.setNickname(newNick);
+    await interaction.reply(newNick ? `✅ تم تغيير لقب **${target.user.tag}** إلى **${newNick}**.` : `✅ تم إزالة لقب **${target.user.tag}**.`);
+  },
+};
+
+const voicekick: Command = {
+  data: new SlashCommandBuilder()
+    .setName("voicekick")
+    .setDescription("🔊 طرد عضو من قناة الصوت")
+    .addUserOption(o => o.setName("عضو").setDescription("العضو المراد طرده من الصوت").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers),
+  async execute(interaction) {
+    const target = interaction.options.getMember("عضو") as GuildMember | null;
+    if (!target) { await interaction.reply({ content: "❌ العضو غير موجود.", ephemeral: true }); return; }
+    if (!target.voice.channel) { await interaction.reply({ content: "❌ العضو ليس في قناة صوتية.", ephemeral: true }); return; }
+    await target.voice.disconnect();
+    await interaction.reply(`✅ تم طرد **${target.user.tag}** من قناة الصوت.`);
+  },
+};
+
+const purge: Command = {
+  data: new SlashCommandBuilder()
+    .setName("purge")
+    .setDescription("🗑️ حذف رسائل عضو معين من القناة")
+    .addUserOption(o => o.setName("عضو").setDescription("العضو").setRequired(true))
+    .addIntegerOption(o => o.setName("عدد").setDescription("عدد الرسائل للفحص (1-100)").setRequired(true).setMinValue(1).setMaxValue(100))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages),
+  async execute(interaction) {
+    const target = interaction.options.getUser("عضو", true);
+    const count = interaction.options.getInteger("عدد", true);
+    const channel = interaction.channel;
+    if (!channel || !("messages" in channel)) { await interaction.reply({ content: "❌ لا يمكن الحذف في هذه القناة.", ephemeral: true }); return; }
+    await interaction.deferReply({ ephemeral: true });
+    const messages = await (channel as any).messages.fetch({ limit: count });
+    const toDelete = messages.filter((m: import("discord.js").Message) => m.author.id === target.id);
+    if (toDelete.size === 0) { await interaction.editReply("❌ لا توجد رسائل لهذا العضو."); return; }
+    await (channel as any).bulkDelete(toDelete, true);
+    await interaction.editReply(`✅ تم حذف **${toDelete.size}** رسالة لـ ${target.tag}.`);
+  },
+};
+
 export const moderationCommands: Command[] = [
   kick, ban, unban, mute, unmute, warn, warnings, clearwarnings, clear, lock,
+  roleAdd, roleRemove, nick, voicekick, purge,
 ];

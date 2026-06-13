@@ -6,6 +6,7 @@ import { onInteractionCreate } from "./events/interaction";
 import { onGuildMemberAdd } from "./events/memberAdd";
 import { onGuildMemberRemove } from "./events/memberRemove";
 import { onMessageCreate } from "./events/messageCreate";
+import { onMessageDelete } from "./events/messageDelete";
 import { startSelfPing } from "./selfping";
 
 export const client = new Client({
@@ -15,8 +16,10 @@ export const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildMessageReactions,
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.GuildMember],
+  partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.Reaction],
 });
 
 const commands = new Collection<string, Command>();
@@ -35,6 +38,7 @@ export async function startBot(): Promise<void> {
   client.on("guildMemberAdd", onGuildMemberAdd);
   client.on("guildMemberRemove", onGuildMemberRemove);
   client.on("messageCreate", onMessageCreate);
+  client.on("messageDelete", onMessageDelete);
 
   await client.login(token);
   logger.info("Discord bot logged in successfully");
@@ -43,6 +47,6 @@ export async function startBot(): Promise<void> {
   if (renderUrl) {
     startSelfPing(renderUrl);
   } else {
-    logger.info("RENDER_URL not set — self-ping disabled (set it after deploying to Render)");
+    logger.info("RENDER_URL not set — self-ping disabled");
   }
 }

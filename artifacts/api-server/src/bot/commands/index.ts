@@ -8,6 +8,8 @@ import { funCommands } from "./fun";
 import { adminCommands } from "./admin";
 import { bloxpinCommands } from "./bloxpin";
 import { ticketCommands } from "./ticket";
+import { utilityCommands } from "./utility";
+import { gamesCommands } from "./games";
 
 export type { Command };
 
@@ -21,6 +23,8 @@ export function loadCommands(collection: Collection<string, Command>): Command[]
     ...adminCommands,
     ...bloxpinCommands,
     ...ticketCommands,
+    ...utilityCommands,
+    ...gamesCommands,
   ];
   for (const cmd of all) {
     collection.set(cmd.data.name, cmd);
