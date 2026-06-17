@@ -16,8 +16,16 @@ from typing import Optional
 TOKEN = os.getenv("TOKEN", "")
 PREFIX = "y."
 RENDER_URL = os.getenv("RENDER_URL", "")
+
+print("=" * 50)
+print(f"🔑 TOKEN: {'✅ موجود ('+str(len(TOKEN))+' حرف)' if TOKEN else '❌ مفقود!'}")
+print(f"🌐 RENDER_URL: {RENDER_URL or '(فارغ)'}")
+print("=" * 50)
+
 if not TOKEN:
-    raise RuntimeError("❌ TOKEN غير موجود")
+    print("❌ خطأ: TOKEN غير موجود في Environment Variables!")
+    print("   روح Render → خدمتك → Environment → أضف TOKEN")
+    import sys; sys.exit(1)
 
 intents = discord.Intents.default()
 intents.members = True
