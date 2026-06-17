@@ -58,13 +58,15 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         guild_id TEXT, alias TEXT, command TEXT)""")
     c.execute("""CREATE TABLE IF NOT EXISTS chatgpt (
-        guild_id TEXT PRIMARY KEY, channel_id TEXT, enabled INTEGER DEFAULT 0)""")
+        guild_id TEXT PRIMARY KEY, channel_id TEXT, enabled INTEGER DEFAULT 0,
+        adab INTEGER DEFAULT 5)""")
     for col in [("tickets","ticket_type","TEXT DEFAULT 'استفسار'"),
                 ("tickets","opened_at","TEXT"),("tickets","closed_by","TEXT"),
                 ("tickets","close_reason","TEXT"),("tickets","closed_at","TEXT"),
                 ("ticket_settings","mention_role_ids","TEXT DEFAULT '[]'"),
                 ("ticket_settings","ticket_types","TEXT DEFAULT '[]'"),
-                ("ticket_settings","close_reasons","TEXT DEFAULT '[]'")]:
+                ("ticket_settings","close_reasons","TEXT DEFAULT '[]'"),
+                ("chatgpt","adab","INTEGER DEFAULT 5")]:
         try: c.execute(f"ALTER TABLE {col[0]} ADD COLUMN {col[1]} {col[2]}")
         except: pass
     conn.commit(); conn.close()
@@ -1597,29 +1599,27 @@ async def on_message(message):
     # ── شات GPT ──
     if message.guild and not message.content.startswith(PREFIX):
         gid = str(message.guild.id)
-        cgrow = db_q("SELECT channel_id, enabled FROM chatgpt WHERE guild_id=?", (gid,), fetch="one")
+        cgrow = db_q("SELECT channel_id, enabled, adab FROM chatgpt WHERE guild_id=?", (gid,), fetch="one")
         if cgrow and cgrow[1] == 1 and cgrow[0] and str(message.channel.id) == cgrow[0]:
-            # cooldown 5 ثوانٍ للمستخدم لتجنب 429
             uid = str(message.author.id)
             now_ts = time.time()
             last_ts = _chat_cooldown.get(uid, 0)
             if now_ts - last_ts < 5:
-                try: await message.add_reaction("⏳")
-                except: pass
                 return
             _chat_cooldown[uid] = now_ts
-            # احذف القيم القديمة بشكل دوري
             if len(_chat_cooldown) > 500:
                 cutoff = now_ts - 30
                 for k in [k for k,v in list(_chat_cooldown.items()) if v < cutoff]:
                     _chat_cooldown.pop(k, None)
+            adab_level = int(cgrow[2]) if cgrow[2] is not None else 5
             async with message.channel.typing():
-                reply = await _call_openai(gid, message.author.display_name, message.content)
-            try:
-                await message.reply(reply[:2000])
-            except Exception:
-                try: await message.channel.send(reply[:2000])
-                except: pass
+                reply = await _call_openai(gid, message.author.display_name, message.content, adab_level)
+            if reply:
+                try:
+                    await message.reply(reply[:2000])
+                except Exception:
+                    try: await message.channel.send(reply[:2000])
+                    except: pass
             return
     await bot.process_commands(message)
 
@@ -2568,40 +2568,18 @@ async def cmd_order(
 #  🤖  نظام شات GPT
 # ══════════════════════════════════════════════
 
-CHAT_SYSTEM_PROMPT = """أنت مساعد خبير شامل اسمك y.bot، تتحدث بالعربية بأسلوب خليجي عفوي وودود كأنك صديق قريب وذكي.
-
-## قدراتك:
-
-### 🖥️ البرمجة الكاملة:
-- تكتب كود احترافي كامل وجاهز للتشغيل بأي لغة: Python, JavaScript, TypeScript, C, C++, Java, Kotlin, Swift, Go, Rust, PHP, Ruby, Dart/Flutter, HTML/CSS, SQL, Bash وغيرها
-- تكتب بوتات Discord بـ discord.py أو discord.js
-- تكتب APIs وbackend وfrontend ومواقع كاملة
-- تكتب سكريبتات أتمتة وأدوات
-- دائماً تكتب الكود داخل code block مع اسم اللغة (```python, ```js, ```cpp إلخ)
-- الكود اللي تكتبه يكون نظيف، موثق، جاهز للنسخ والتشغيل مباشرة
-
-### 🐛 تحليل المشاكل والأخطاء:
-- تحلل أي error أو bug وتشرح سببه وحله بالتفصيل
-- تراجع الكود وتلاقي المشاكل المخفية
-- تعطي أفضل الحلول مع شرح لماذا هذا الحل هو الأفضل
-- تعرف تصحح كود معطوب وتحسّنه
-
-### 🧠 الذكاء والتحليل:
-- تحل مسائل رياضية وخوارزميات
-- تشرح مفاهيم تقنية بطريقة بسيطة
-- تساعد في تصميم قواعد البيانات والمعمارية البرمجية
-- تحلل أي نص أو بيانات وتعطي رأيك
-
-### 💬 المحادثة والسولفة:
-- تسولف وتمزح وتتكلم بشكل طبيعي
-- تساعد في أي سؤال في أي مجال
-
-## قواعد مهمة:
-- الكود دائماً داخل code block بالصيغة الصحيحة
-- الشرح بالعربية، أسماء المتغيرات والكود بالإنجليزي
-- إذا الكود طويل قسّمه على أجزاء مع شرح لكل جزء
-- لا تقول "لا أستطيع" — دائماً حاول وقدم أفضل ما عندك
-- لا تذكر أنك ذكاء اصطناعي إلا إذا سُئلت مباشرة"""
+def _make_system_prompt(adab: int = 5) -> str:
+    adab = max(0, min(10, adab))
+    if adab == 0:
+        return """انت اسمك y.bot. تتكلم بالعامية الخليجية فقط، وما عندك أي أدب أو احترام. تستخدم كلام سوقي وشتائم خفيفة بشكل طبيعي في كلامك، تسب وتشتم براحتك وتتجاوب بطريقة وقحة ومزعجة. ما تحترم أحد وما تقول "كيف أساعدك" أو أي كلام رسمي. تتكلم مثل شخص مو مؤدب خالص بس تجاوب على الأسئلة."""
+    elif adab <= 3:
+        return """انت اسمك y.bot. تتكلم بالعامية الخليجية، شوي وقح وما تهتم كثير بالأدب. تجاوب بشكل مباشر وسريع بدون زيادة احترام، وأحياناً تقول كلام حاد. تتكلم مثل صاحب قليل الصبر."""
+    elif adab <= 6:
+        return """أنت مساعد خبير اسمك y.bot، تتحدث بالعربية بأسلوب خليجي عفوي وودود كأنك صديق قريب وذكي. تسولف وتمزح وتساعد بكل المواضيع. لا تذكر أنك ذكاء اصطناعي إلا إذا سُئلت مباشرة."""
+    elif adab <= 8:
+        return """أنت مساعد محترم ومفيد اسمك y.bot، تتحدث بالعربية بأسلوب راقٍ وودود. تساعد في جميع المواضيع بأدب واحترام. تتكلم بشكل واضح ومنظم."""
+    else:
+        return """أنت مساعد ذكي ومحترم للغاية اسمك y.bot، تتحدث بالعربية الفصحى المبسّطة مع احترام تام. تستخدم كلاماً راقياً ومهذباً في جميع الأوقات. تقدّر المتحدث وتجيب بأسلوب علمي ومنظم."""
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 _chat_cooldown: dict = {}
@@ -2708,14 +2686,15 @@ async def _try_pollinations(messages: list) -> str | None:
     return None
 
 
-async def _call_openai(guild_id: str, user_name: str, user_msg: str) -> str:
+async def _call_openai(guild_id: str, user_name: str, user_msg: str, adab: int = 5) -> str | None:
     global _LAST_AI_TIME
     hist = chatgpt_history.setdefault(guild_id, [])
     hist.append({"role": "user", "content": f"{user_name}: {user_msg}"})
     if len(hist) > 20:
         chatgpt_history[guild_id] = hist[-20:]
         hist = chatgpt_history[guild_id]
-    messages = [{"role": "system", "content": CHAT_SYSTEM_PROMPT}] + hist
+    system_prompt = _make_system_prompt(adab)
+    messages = [{"role": "system", "content": system_prompt}] + hist
 
     async with _ai_sem():
         gap = _MIN_AI_GAP - (time.time() - _LAST_AI_TIME)
@@ -2723,37 +2702,32 @@ async def _call_openai(guild_id: str, user_name: str, user_msg: str) -> str:
             await asyncio.sleep(gap)
         _LAST_AI_TIME = time.time()
 
-        # ── 1. Gemini (إذا في مفتاح — الأفضل والأسرع) ──
         reply = await _try_gemini(messages)
         if reply:
             hist.append({"role": "assistant", "content": reply})
             return reply[:2000]
 
-        # ── 2. DeepInfra عبر g4f (مجاني بدون مفتاح) ──
         reply = await _try_g4f(messages, "DeepInfra")
         if reply:
             hist.append({"role": "assistant", "content": reply})
             return reply[:2000]
 
-        # ── 3. Yqcloud عبر g4f (مجاني بدون مفتاح) ──
         reply = await _try_g4f(messages, "Yqcloud")
         if reply:
             hist.append({"role": "assistant", "content": reply})
             return reply[:2000]
 
-        # ── 4. Qwen_Qwen_3 عبر g4f ──
         reply = await _try_g4f(messages, "Qwen_Qwen_3")
         if reply:
             hist.append({"role": "assistant", "content": reply})
             return reply[:2000]
 
-        # ── 5. Pollinations كملاذ أخير ──
         reply = await _try_pollinations(messages)
         if reply:
             hist.append({"role": "assistant", "content": reply})
             return reply[:2000]
 
-        return "⏳ ما قدرت أوصل للذكاء الاصطناعي الحين، جرب بعد ثوانٍ."
+        return None
 
 @bot.tree.command(name="chatgpt-set", description="🤖 تحديد قناة الشات مع الذكاء الاصطناعي")
 @app_commands.describe(channel="القناة التي سيرد فيها البوت")
@@ -2806,6 +2780,30 @@ async def cmd_chatgpt(ctx, action: str = "help", *, value: str = ""):
         await ctx.send("🧹 تم مسح السجل.")
     else:
         await ctx.send("📖 **y.chatgpt** — الاستخدام:\n`on/off` تفعيل/إيقاف\n`set <#قناة>` تحديد الروم\n`clear` مسح السجل")
+
+@bot.tree.command(name="adab-set", description="🎭 ضبط مستوى الأدب (0 = بدون أدب ، 10 = محترم جداً)")
+@app_commands.describe(level="مستوى الأدب من 0 إلى 10")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_adab_set(interaction: discord.Interaction, level: int):
+    if level < 0 or level > 10:
+        await interaction.response.send_message("❌ المستوى لازم يكون بين 0 و 10.", ephemeral=True)
+        return
+    db_upsert("chatgpt", str(interaction.guild.id), adab=level)
+    labels = {
+        0: "😈 بدون أدب خالص — عامي وقح",
+        1: "😒 شبه بدون أدب",
+        2: "😐 قليل الأدب",
+        3: "🙄 شوي وقح",
+        4: "😏 عادي مع شوي حدة",
+        5: "😊 طبيعي وودود",
+        6: "🙂 محترم نوعاً ما",
+        7: "😌 محترم",
+        8: "🤝 محترم جداً",
+        9: "🎩 راقي",
+        10: "👑 احترام تام وفصحى"
+    }
+    label = labels.get(level, str(level))
+    await interaction.response.send_message(f"✅ مستوى الأدب تم ضبطه على **{level}/10** — {label}")
 
 # ═══════════════════════════════════════════════════════════════
 
