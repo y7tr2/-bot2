@@ -1,7 +1,16 @@
 services:
   - type: web
-    name: discord-gen-bot
-    env: node
+    name: bot2
+    env: python
     plan: free
-    buildCommand: npm install
-    startCommand: node keep_alive.js & node index.js
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: TOKEN
+        sync: false
+      - key: RENDER_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
