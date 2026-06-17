@@ -2629,8 +2629,11 @@ def _ai_sem() -> asyncio.Semaphore:
 
 async def _try_g4f(messages: list, provider_name: str) -> str | None:
     """محاولة عبر g4f provider"""
-    import g4f
-    from g4f.client import AsyncClient
+    try:
+        import g4f
+        from g4f.client import AsyncClient
+    except ImportError:
+        return None
     try:
         prov = getattr(g4f.Provider, provider_name, None)
         if prov is None:
