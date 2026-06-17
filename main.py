@@ -1647,14 +1647,17 @@ async def on_message(message):
                 for k in [k for k,v in list(_chat_cooldown.items()) if v < cutoff]:
                     _chat_cooldown.pop(k, None)
             adab_level = int(cgrow[2]) if cgrow[2] is not None else 5
-            async with message.channel.typing():
-                reply = await _call_openai(gid, message.author.display_name, message.content, adab_level)
-            if reply:
-                try:
-                    await message.reply(reply[:2000])
-                except Exception:
-                    try: await message.channel.send(reply[:2000])
-                    except: pass
+            try:
+                async with message.channel.typing():
+                    reply = await _call_openai(gid, message.author.display_name, message.content, adab_level)
+                if reply:
+                    try:
+                        await message.reply(reply[:2000])
+                    except Exception:
+                        try: await message.channel.send(reply[:2000])
+                        except: pass
+            except Exception:
+                pass  # صمت تام عند أي خطأ
             return
     await bot.process_commands(message)
 
