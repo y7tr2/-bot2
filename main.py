@@ -2872,16 +2872,21 @@ def _run_flask():
     port = int(os.getenv("PORT", 8080))
     _app.run(host="0.0.0.0", port=port)
 
-threading.Thread(target=_run_flask, daemon=True).start()
+def _start_bot():
+    global _last_error
+    try:
+        bot.run(TOKEN)
+    except discord.errors.LoginFailure:
+        _last_error = "TOKEN خاطئ أو منتهي — روح Discord Developer Portal وأعد إنشاؤه"
+        print(f"❌ {_last_error}")
+    except discord.errors.PrivilegedIntentsRequired:
+        _last_error = "Privileged Intents مو مفعّلة — فعّلها في Discord Developer Portal"
+        print(f"❌ {_last_error}")
+    except Exception as e:
+        _last_error = str(e)
+        print(f"❌ خطأ: {e}")
 
-try:
-    bot.run(TOKEN)
-except discord.errors.LoginFailure:
-    _last_error = "TOKEN خاطئ أو منتهي — روح Discord Developer Portal وأعد إنشاؤه"
-    print(f"❌ {_last_error}")
-except discord.errors.PrivilegedIntentsRequired:
-    _last_error = "Privileged Intents مو مفعّلة — فعّلها في Discord Developer Portal"
-    print(f"❌ {_last_error}")
-except Exception as e:
-    _last_error = str(e)
-    print(f"❌ خطأ: {e}")
+threading.Thread(target=_start_bot, daemon=True).start()
+
+# Flask يشتغل في الـ main thread — يمنع الخروج حتى لو كراش البوت
+_run_flask()
