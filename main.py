@@ -2850,13 +2850,38 @@ async def slash_adab_set(interaction: discord.Interaction, level: int):
 from flask import Flask
 import threading
 _app = Flask(__name__)
+_last_error = ""
 
 @_app.route("/")
 def _health(): return "OK", 200
+
+@_app.route("/status")
+def _status():
+    connected = bot.is_ready()
+    guilds = len(bot.guilds) if connected else 0
+    latency = round(bot.latency * 1000) if connected else -1
+    return {
+        "online": connected,
+        "guilds": guilds,
+        "latency_ms": latency,
+        "last_error": _last_error,
+        "token_set": bool(TOKEN)
+    }, 200
 
 def _run_flask():
     port = int(os.getenv("PORT", 8080))
     _app.run(host="0.0.0.0", port=port)
 
 threading.Thread(target=_run_flask, daemon=True).start()
-bot.run(TOKEN)
+
+try:
+    bot.run(TOKEN)
+except discord.errors.LoginFailure:
+    _last_error = "TOKEN خاطئ أو منتهي — روح Discord Developer Portal وأعد إنشاؤه"
+    print(f"❌ {_last_error}")
+except discord.errors.PrivilegedIntentsRequired:
+    _last_error = "Privileged Intents مو مفعّلة — فعّلها في Discord Developer Portal"
+    print(f"❌ {_last_error}")
+except Exception as e:
+    _last_error = str(e)
+    print(f"❌ خطأ: {e}")
