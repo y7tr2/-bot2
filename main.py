@@ -19,7 +19,12 @@ RENDER_URL = os.getenv("RENDER_URL", "")
 if not TOKEN:
     raise RuntimeError("❌ TOKEN غير موجود")
 
-intents = discord.Intents.all()
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+intents.guilds = True
+intents.bans = True
+intents.voice_states = True
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 DB_FILE = "bot_data.db"
 
