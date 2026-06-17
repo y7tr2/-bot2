@@ -165,10 +165,42 @@ dhikr_channels = {}; recent_deletions = {}; bot.start_time = datetime.datetime.u
 @bot.event
 async def on_ready():
     init_db(); print(f"✅ {bot.user}")
-    try: synced = await bot.tree.sync(); print(f"✅ {len(synced)} أمر")
-    except Exception as e: print(f"❌ {e}")
+    # تسجيل فوري لكل سيرفر (يظهر خلال ثوانٍ)
+    total = 0
+    for guild in bot.guilds:
+        try:
+            synced = await bot.tree.sync(guild=guild)
+            total += len(synced)
+        except Exception as e:
+            print(f"❌ sync {guild.id}: {e}")
+    # تسجيل عالمي أيضاً (يأخذ ساعة لكن يغطي السيرفرات الجديدة)
+    try:
+        await bot.tree.sync()
+    except Exception as e:
+        print(f"❌ global sync: {e}")
+    print(f"✅ سُجّل {total} أمر على {len(bot.guilds)} سيرفر")
     for t in [check_auctions, send_dhikr, self_ping]:
         if not t.is_running(): t.start()
+
+@bot.event
+async def on_guild_join(guild):
+    try:
+        synced = await bot.tree.sync(guild=guild)
+        print(f"✅ sync {guild.name}: {len(synced)} أمر")
+    except Exception as e:
+        print(f"❌ sync {guild.name}: {e}")
+
+@bot.command(name="sync", aliases=["سجل"])
+@commands.is_owner()
+async def cmd_sync(ctx):
+    msg = await ctx.send("⏳ جاري تسجيل الأوامر...")
+    total = 0
+    for guild in bot.guilds:
+        try:
+            s = await bot.tree.sync(guild=guild)
+            total += len(s)
+        except: pass
+    await msg.edit(content=f"✅ تم تسجيل **{total}** أمر على **{len(bot.guilds)}** سيرفر!")
 
 @tasks.loop(seconds=10)
 async def send_dhikr():
