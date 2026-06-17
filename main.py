@@ -13,19 +13,9 @@ import itertools
 import aiohttp
 from typing import Optional
 
-TOKEN = os.getenv("TOKEN", "")
+TOKEN = os.getenv("TOKEN", "").strip()
 PREFIX = "y."
-RENDER_URL = os.getenv("RENDER_URL", "")
-
-print("=" * 50)
-print(f"🔑 TOKEN: {'✅ موجود ('+str(len(TOKEN))+' حرف)' if TOKEN else '❌ مفقود!'}")
-print(f"🌐 RENDER_URL: {RENDER_URL or '(فارغ)'}")
-print("=" * 50)
-
-if not TOKEN:
-    print("❌ خطأ: TOKEN غير موجود في Environment Variables!")
-    print("   روح Render → خدمتك → Environment → أضف TOKEN")
-    import sys; sys.exit(1)
+RENDER_URL = os.getenv("RENDER_URL", "").strip()
 
 intents = discord.Intents.default()
 intents.members = True
@@ -37,7 +27,7 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 DB_FILE = "bot_data.db"
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS auctions (
         id INTEGER PRIMARY KEY AUTOINCREMENT, item_name TEXT, start_price INTEGER,
@@ -85,13 +75,13 @@ def init_db():
     conn.commit(); conn.close()
 
 def db_q(sql, params=(), fetch=None):
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     c = conn.cursor(); c.execute(sql, params); conn.commit()
     r = c.fetchall() if fetch=="all" else c.fetchone() if fetch=="one" else None
     conn.close(); return r
 
 def db_upsert(table, guild_id, **kw):
-    conn = sqlite3.connect(DB_FILE); c = conn.cursor()
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False); c = conn.cursor()
     c.execute(f"SELECT guild_id FROM {table} WHERE guild_id=?", (guild_id,))
     if c.fetchone():
         for k,v in kw.items(): c.execute(f"UPDATE {table} SET {k}=? WHERE guild_id=?", (v, guild_id))
@@ -2627,6 +2617,7 @@ def _make_system_prompt(adab: int = 5) -> str:
         return """أنت مساعد ذكي ومحترم للغاية اسمك y.bot، تتحدث بالعربية الفصحى المبسّطة مع احترام تام. تستخدم كلاماً راقياً ومهذباً في جميع الأوقات. تقدّر المتحدث وتجيب بأسلوب علمي ومنظم."""
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+CHAT_SYSTEM_PROMPT = _make_system_prompt(5)   # default adab=5
 _chat_cooldown: dict = {}
 _AI_SEM: asyncio.Semaphore = None   # lazy init after event loop starts
 _LAST_AI_TIME: float = 0.0
@@ -2855,46 +2846,81 @@ async def slash_adab_set(interaction: discord.Interaction, level: int):
 
 # ═══════════════════════════════════════════════════════════════
 
-from flask import Flask
+import sys
 import threading
+from flask import Flask
+
 _app = Flask(__name__)
 _last_error = ""
+_bot_started = False
+
+# ══════════════════════════════════════════════
+#  صفحة الصحة والتشخيص
+# ══════════════════════════════════════════════
 
 @_app.route("/")
-def _health(): return "OK", 200
+def _health():
+    return "OK", 200
 
 @_app.route("/status")
 def _status():
     connected = bot.is_ready()
-    guilds = len(bot.guilds) if connected else 0
-    latency = round(bot.latency * 1000) if connected else -1
     return {
         "online": connected,
-        "guilds": guilds,
-        "latency_ms": latency,
+        "guilds": len(bot.guilds) if connected else 0,
+        "latency_ms": round(bot.latency * 1000) if connected else -1,
+        "token_set": bool(TOKEN),
+        "token_length": len(TOKEN),
         "last_error": _last_error,
-        "token_set": bool(TOKEN)
+        "bot_started": _bot_started,
     }, 200
 
-def _run_flask():
-    port = int(os.getenv("PORT", 8080))
-    _app.run(host="0.0.0.0", port=port)
+# ══════════════════════════════════════════════
+#  تشغيل البوت في thread منفصل
+# ══════════════════════════════════════════════
 
 def _start_bot():
-    global _last_error
+    global _last_error, _bot_started
+    _bot_started = True
+
+    print("=" * 50)
+    print(f"🔑 TOKEN: {'✅ موجود (' + str(len(TOKEN)) + ' حرف)' if TOKEN else '❌ مفقود!'}")
+    print(f"🌐 RENDER_URL: {RENDER_URL or '(فارغ - اختياري)'}")
+    print("=" * 50)
+
+    if not TOKEN:
+        _last_error = "TOKEN مفقود — روح Render → Environment Variables → أضف TOKEN"
+        print(f"❌ {_last_error}")
+        return
+
+    # إعداد قاعدة البيانات قبل تشغيل البوت
     try:
-        bot.run(TOKEN)
+        init_db()
+        print("✅ قاعدة البيانات جاهزة")
+    except Exception as e:
+        print(f"⚠️ init_db: {e}")
+
+    try:
+        print("⏳ جاري الاتصال بـ Discord...")
+        bot.run(TOKEN, log_handler=None)
     except discord.errors.LoginFailure:
-        _last_error = "TOKEN خاطئ أو منتهي — روح Discord Developer Portal وأعد إنشاؤه"
+        _last_error = "TOKEN خاطئ أو منتهي — روح Discord Developer Portal وجيب token جديد"
         print(f"❌ {_last_error}")
     except discord.errors.PrivilegedIntentsRequired:
-        _last_error = "Privileged Intents مو مفعّلة — فعّلها في Discord Developer Portal"
+        _last_error = "Privileged Intents مو مفعّلة — فعّل Server Members + Message Content في Discord Developer Portal"
         print(f"❌ {_last_error}")
     except Exception as e:
         _last_error = str(e)
-        print(f"❌ خطأ: {e}")
+        print(f"❌ خطأ غير متوقع: {e}")
 
+# ══════════════════════════════════════════════
+#  Flask في main thread (يمنع exit) + Bot في thread
+# ══════════════════════════════════════════════
+
+# البوت في background thread
 threading.Thread(target=_start_bot, daemon=True).start()
 
-# Flask يشتغل في الـ main thread — يمنع الخروج حتى لو كراش البوت
-_run_flask()
+# Flask في main thread — يبقى شغّال دائماً حتى لو كراش البوت
+port = int(os.getenv("PORT", 8080))
+print(f"🌐 Flask يشتغل على port {port}")
+_app.run(host="0.0.0.0", port=port)
