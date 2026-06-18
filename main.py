@@ -26,12 +26,6 @@ def _status():
     }, 200
 
 _flask_port = int(os.getenv("PORT", 8080))
-print(f"🌐 Flask binding to port {_flask_port}...")
-threading.Thread(
-    target=lambda: _app.run(host="0.0.0.0", port=_flask_port, use_reloader=False),
-    daemon=False   # non-daemon: يمنع الخروج حتى لو كل شي ثاني كراش
-).start()
-print("✅ Flask up")
 
 # ══════════════════════════════════════════════
 #  الآن نستورد بقية المكتبات
@@ -2929,3 +2923,7 @@ def _start_bot_thread():
         loop.close()
 
 threading.Thread(target=_start_bot_thread, daemon=True).start()
+
+# Flask في main thread — يمنع الخروج ويمنع atexit من الاستدعاء المبكر
+print(f"🌐 Flask على port {_flask_port}")
+_app.run(host="0.0.0.0", port=_flask_port, use_reloader=False)
