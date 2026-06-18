@@ -2886,7 +2886,7 @@ async def slash_adab_set(interaction: discord.Interaction, level: int):
 #  تشغيل البوت
 # ═══════════════════════════════════════════════════════════════
 
-def _start_bot():
+async def _bot_main():
     global _last_error, _bot_started
     _bot_started = True
 
@@ -2908,7 +2908,8 @@ def _start_bot():
 
     try:
         print("⏳ جاري الاتصال بـ Discord...")
-        bot.run(TOKEN, log_handler=None)
+        async with bot:
+            await bot.start(TOKEN)
     except discord.errors.LoginFailure:
         _last_error = "TOKEN خاطئ أو منتهي — جيب token جديد من Discord Developer Portal"
         print(f"❌ {_last_error}")
@@ -2919,4 +2920,12 @@ def _start_bot():
         _last_error = str(e)
         print(f"❌ {e}")
 
-threading.Thread(target=_start_bot, daemon=True).start()
+def _start_bot_thread():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(_bot_main())
+    finally:
+        loop.close()
+
+threading.Thread(target=_start_bot_thread, daemon=True).start()
