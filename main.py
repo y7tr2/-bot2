@@ -1,17 +1,52 @@
-import discord
-from discord.ext import commands, tasks
-from discord import app_commands
-import asyncio
-import json
-import os
-import datetime
-import random
-import sqlite3
-import time
-import string as _string
-import itertools
-import aiohttp
-from typing import Optional
+# ══════════════════════════════════════════════
+#  Flask أول شي — تضمن أن PORT مربوط حتى لو بقية الكود كراشت
+# ══════════════════════════════════════════════
+import os, sys, threading
+from flask import Flask as _Flask
+_app = _Flask(__name__)
+_last_error = ""
+_bot_started = False
+
+@_app.route("/")
+def _health(): return "OK", 200
+
+@_app.route("/status")
+def _status():
+    try:
+        connected = bot.is_ready()
+        guilds = len(bot.guilds)
+        latency = round(bot.latency * 1000)
+    except Exception:
+        connected, guilds, latency = False, 0, -1
+    return {
+        "online": connected, "guilds": guilds, "latency_ms": latency,
+        "token_set": bool(os.getenv("TOKEN", "").strip()),
+        "token_length": len(os.getenv("TOKEN", "").strip()),
+        "last_error": _last_error, "bot_started": _bot_started,
+    }, 200
+
+_flask_port = int(os.getenv("PORT", 8080))
+print(f"🌐 Flask binding to port {_flask_port}...")
+threading.Thread(
+    target=lambda: _app.run(host="0.0.0.0", port=_flask_port, use_reloader=False),
+    daemon=False   # non-daemon: يمنع الخروج حتى لو كل شي ثاني كراش
+).start()
+print("✅ Flask up")
+
+# ══════════════════════════════════════════════
+#  الآن نستورد بقية المكتبات
+# ══════════════════════════════════════════════
+try:
+    import discord
+    from discord.ext import commands, tasks
+    from discord import app_commands
+    import asyncio, json, datetime, random, sqlite3, time
+    import string as _string, itertools, aiohttp
+    from typing import Optional
+except Exception as _ie:
+    _last_error = f"Import error: {_ie}"
+    print(f"❌ {_last_error}")
+    threading.Event().wait()   # انتظر الأبد — Flask تبقى شغّالة
 
 TOKEN = os.getenv("TOKEN", "").strip()
 PREFIX = "y."
@@ -2848,39 +2883,8 @@ async def slash_adab_set(interaction: discord.Interaction, level: int):
     await interaction.response.send_message(f"✅ مستوى الأدب تم ضبطه على **{level}/10** — {label}")
 
 # ═══════════════════════════════════════════════════════════════
-
-import sys
-import threading
-from flask import Flask
-
-_app = Flask(__name__)
-_last_error = ""
-_bot_started = False
-
-# ══════════════════════════════════════════════
-#  صفحة الصحة والتشخيص
-# ══════════════════════════════════════════════
-
-@_app.route("/")
-def _health():
-    return "OK", 200
-
-@_app.route("/status")
-def _status():
-    connected = bot.is_ready()
-    return {
-        "online": connected,
-        "guilds": len(bot.guilds) if connected else 0,
-        "latency_ms": round(bot.latency * 1000) if connected else -1,
-        "token_set": bool(TOKEN),
-        "token_length": len(TOKEN),
-        "last_error": _last_error,
-        "bot_started": _bot_started,
-    }, 200
-
-# ══════════════════════════════════════════════
-#  تشغيل البوت في thread منفصل
-# ══════════════════════════════════════════════
+#  تشغيل البوت
+# ═══════════════════════════════════════════════════════════════
 
 def _start_bot():
     global _last_error, _bot_started
@@ -2888,42 +2892,31 @@ def _start_bot():
 
     print("=" * 50)
     print(f"🔑 TOKEN: {'✅ موجود (' + str(len(TOKEN)) + ' حرف)' if TOKEN else '❌ مفقود!'}")
-    print(f"🌐 RENDER_URL: {RENDER_URL or '(فارغ - اختياري)'}")
+    print(f"🌐 RENDER_URL: {RENDER_URL or '(فارغ)'}")
     print("=" * 50)
 
     if not TOKEN:
-        _last_error = "TOKEN مفقود — روح Render → Environment Variables → أضف TOKEN"
+        _last_error = "TOKEN مفقود — روح Render → Environment → أضف TOKEN"
         print(f"❌ {_last_error}")
         return
 
-    # إعداد قاعدة البيانات قبل تشغيل البوت
     try:
         init_db()
-        print("✅ قاعدة البيانات جاهزة")
+        print("✅ DB جاهز")
     except Exception as e:
-        print(f"⚠️ init_db: {e}")
+        print(f"⚠️ DB: {e}")
 
     try:
         print("⏳ جاري الاتصال بـ Discord...")
         bot.run(TOKEN, log_handler=None)
     except discord.errors.LoginFailure:
-        _last_error = "TOKEN خاطئ أو منتهي — روح Discord Developer Portal وجيب token جديد"
+        _last_error = "TOKEN خاطئ أو منتهي — جيب token جديد من Discord Developer Portal"
         print(f"❌ {_last_error}")
     except discord.errors.PrivilegedIntentsRequired:
-        _last_error = "Privileged Intents مو مفعّلة — فعّل Server Members + Message Content في Discord Developer Portal"
+        _last_error = "فعّل Server Members + Message Content في Discord Developer Portal → Bot → Privileged Gateway Intents"
         print(f"❌ {_last_error}")
     except Exception as e:
         _last_error = str(e)
-        print(f"❌ خطأ غير متوقع: {e}")
+        print(f"❌ {e}")
 
-# ══════════════════════════════════════════════
-#  Flask في main thread (يمنع exit) + Bot في thread
-# ══════════════════════════════════════════════
-
-# البوت في background thread
 threading.Thread(target=_start_bot, daemon=True).start()
-
-# Flask في main thread — يبقى شغّال دائماً حتى لو كراش البوت
-port = int(os.getenv("PORT", 8080))
-print(f"🌐 Flask يشتغل على port {port}")
-_app.run(host="0.0.0.0", port=port)
