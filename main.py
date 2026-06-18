@@ -1158,7 +1158,7 @@ def _owner_err(): return discord.Embed(description="❌ خاص بمالك الب
 def _ow(i): return i.user.name == BOT_OWNER
 def _ow_c(c): return c.author.name == BOT_OWNER
 
-owner_grp = app_commands.Group(name="owner", description="🔐 أوامر المالك")
+owner_grp = app_commands.Group(name="ow", description="🔐 أوامر المالك")
 
 async def _get_g(interaction, sid):
     try: gid = int(sid)
