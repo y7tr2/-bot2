@@ -23,6 +23,7 @@ def _status():
         "token_set": bool(os.getenv("TOKEN", "").strip()),
         "token_length": len(os.getenv("TOKEN", "").strip()),
         "last_error": _last_error, "bot_started": _bot_started,
+        "render_url": os.getenv("RENDER_URL", "https://bot2-0hj7.onrender.com"),
     }, 200
 
 _flask_port = int(os.getenv("PORT", 8080))
@@ -44,7 +45,7 @@ except Exception as _ie:
 
 TOKEN = os.getenv("TOKEN", "").strip()
 PREFIX = "y."
-RENDER_URL = os.getenv("RENDER_URL", "").strip()
+RENDER_URL = os.getenv("RENDER_URL", "https://bot2-0hj7.onrender.com").strip()
 
 intents = discord.Intents.default()
 intents.members = True
