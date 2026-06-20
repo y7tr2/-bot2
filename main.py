@@ -1529,6 +1529,7 @@ async def on_message(message):
             except Exception:
                 pass  # صمت تام عند أي خطأ
             return
+    await store_prefix_handler(message)
     await bot.process_commands(message)
 
 @bot.event
@@ -2856,7 +2857,7 @@ async def store_prefix_handler(msg: discord.Message):
 
     # !نقاط @مستخدم عدد — للأدمن فقط
     if cmd == 'نقاط':
-        if msg.author.username not in STORE_POINTS_ADMINS:
+        if msg.author.name not in STORE_POINTS_ADMINS:
             return await msg.reply("❌ هذا الأمر للأدمن فقط")
         if not msg.mentions:
             return await msg.reply("❌ الاستخدام: `!نقاط @مستخدم عدد`\nمثال: `!نقاط @أحمد 50`")
@@ -2904,7 +2905,7 @@ async def store_prefix_handler(msg: discord.Message):
 
     # !حسابات نوع — للأدمن فقط، يبعث الحسابات بالخاص
     elif cmd == 'حسابات':
-        if msg.author.username not in STORE_POINTS_ADMINS:
+        if msg.author.name not in STORE_POINTS_ADMINS:
             return await msg.reply("❌ هذا الأمر للأدمن فقط")
         if len(parts) < 2:
             return await msg.reply("❌ الاستخدام: `!حسابات اسم_النوع`")
