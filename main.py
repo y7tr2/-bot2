@@ -2923,7 +2923,7 @@ async def store_prefix_handler(msg: discord.Message):
         except:
             await msg.reply(embed=e, delete_after=15)
 
-# ─── Slash Commands تبدأ بـ s ────────────────────────────────
+# ─── Slash Commands المتجر ───────────────────────────────────
 
 @bot.tree.command(name="ssetup", description="🏪 أرسل بانل المتجر في القناة الحالية")
 @app_commands.checks.has_permissions(administrator=True)
@@ -2937,7 +2937,7 @@ async def slash_ssetup(interaction: discord.Interaction):
     await interaction.channel.send(embed=embed, view=view)
     await interaction.response.send_message("✅ تم إرسال البانل", ephemeral=True)
 
-@bot.tree.command(name="sstock", description="📦 عرض عدد الحسابات المتاحة")
+@bot.tree.command(name="sstock", description="📦 عرض المخزون")
 async def slash_sstock(interaction: discord.Interaction):
     types = store_get_types()
     e = discord.Embed(title="📦 المخزون", color=0x2ECC71)
@@ -2946,57 +2946,58 @@ async def slash_sstock(interaction: discord.Interaction):
     else:
         for tk, dn, price in types:
             qty = store_get_account_count(tk)
-            e.add_field(name=dn, value=f"{qty}/10 | {price}🪙", inline=True)
+            status = "✅ متوفر (" + str(qty) + ")" if qty > 0 else "❌ نافد"
+            e.add_field(name=dn, value=status + "\n" + str(price) + "🪙", inline=True)
     await interaction.response.send_message(embed=e, ephemeral=True)
 
-@bot.tree.command(name="saddtype", description="➕ أضف نوع حساب جديد وحدد سعره")
-@app_commands.describe(نوع="اسم النوع مثال: Roblox", سعر="السعر بالنقاط")
+@bot.tree.command(name="saddtype", description="➕ أضف نوع حساب جديد")
+@app_commands.describe(name="اسم النوع مثال: Roblox", price="السعر بالنقاط")
 @app_commands.checks.has_permissions(administrator=True)
-async def slash_saddtype(interaction: discord.Interaction, نوع: str, سعر: int):
-    if سعر < 1:
+async def slash_saddtype(interaction: discord.Interaction, name: str, price: int):
+    if price < 1:
         return await interaction.response.send_message("❌ السعر لازم يكون 1 على الأقل", ephemeral=True)
-    tk = نوع.lower().strip().replace(" ", "_")
+    tk = name.lower().strip().replace(" ", "_")
     existing = db_q("SELECT type_key FROM store_types WHERE type_key=?", (tk,), fetch="one")
     if existing:
-        db_q("UPDATE store_types SET display_name=?, price_points=? WHERE type_key=?", (نوع, سعر, tk))
-        await interaction.response.send_message(f"✅ تم تحديث **{نوع}** — السعر الجديد: **{سعر} نقطة**", ephemeral=True)
+        db_q("UPDATE store_types SET display_name=?, price_points=? WHERE type_key=?", (name, price, tk))
+        await interaction.response.send_message(f"✅ تم تحديث **{name}** — السعر: **{price} نقطة**", ephemeral=True)
     else:
-        db_q("INSERT INTO store_types (type_key, display_name, price_points) VALUES (?,?,?)", (tk, نوع, سعر))
-        await interaction.response.send_message(f"✅ تم إضافة نوع **{نوع}** بسعر **{سعر} نقطة**", ephemeral=True)
+        db_q("INSERT INTO store_types (type_key, display_name, price_points) VALUES (?,?,?)", (tk, name, price))
+        await interaction.response.send_message(f"✅ تم إضافة نوع **{name}** بسعر **{price} نقطة**", ephemeral=True)
 
 @bot.tree.command(name="sremovetype", description="🗑️ احذف نوع حساب")
-@app_commands.describe(نوع="اسم النوع")
+@app_commands.describe(name="اسم النوع")
 @app_commands.checks.has_permissions(administrator=True)
-async def slash_sremovetype(interaction: discord.Interaction, نوع: str):
-    tk = نوع.lower().strip().replace(" ", "_")
+async def slash_sremovetype(interaction: discord.Interaction, name: str):
+    tk = name.lower().strip().replace(" ", "_")
     r = db_q("SELECT type_key FROM store_types WHERE type_key=?", (tk,), fetch="one")
     if not r:
-        return await interaction.response.send_message(f"❌ النوع **{نوع}** غير موجود", ephemeral=True)
+        return await interaction.response.send_message(f"❌ النوع **{name}** غير موجود", ephemeral=True)
     db_q("DELETE FROM store_types WHERE type_key=?", (tk,))
     db_q("DELETE FROM store_accounts WHERE type_key=?", (tk,))
-    await interaction.response.send_message(f"✅ تم حذف **{نوع}** وكل حساباته", ephemeral=True)
+    await interaction.response.send_message(f"✅ تم حذف **{name}** وكل حساباته", ephemeral=True)
 
 @bot.tree.command(name="sadd", description="📥 أضف حساب لنوع معين (الحد 10)")
-@app_commands.describe(نوع="اسم النوع", حساب="يوزر:باس")
+@app_commands.describe(name="اسم النوع", account="يوزر:باس")
 @app_commands.checks.has_permissions(administrator=True)
-async def slash_sadd(interaction: discord.Interaction, نوع: str, حساب: str):
-    tk = نوع.lower().strip().replace(" ", "_")
+async def slash_sadd(interaction: discord.Interaction, name: str, account: str):
+    tk = name.lower().strip().replace(" ", "_")
     r = db_q("SELECT type_key FROM store_types WHERE type_key=?", (tk,), fetch="one")
     if not r:
         return await interaction.response.send_message(
-            f"❌ النوع **{نوع}** غير موجود، أضفه أولاً بـ `/saddtype`", ephemeral=True)
+            f"❌ النوع **{name}** غير موجود، أضفه أولاً بـ `/saddtype`", ephemeral=True)
     qty = store_get_account_count(tk)
     if qty >= 10:
         return await interaction.response.send_message(
-            f"❌ المخزون ممتلئ! الحد الأقصى 10 حسابات لكل نوع", ephemeral=True)
-    db_q("INSERT INTO store_accounts (type_key, account) VALUES (?,?)", (tk, حساب.strip()))
+            "❌ المخزون ممتلئ! الحد الأقصى 10 حسابات لكل نوع", ephemeral=True)
+    db_q("INSERT INTO store_accounts (type_key, account) VALUES (?,?)", (tk, account.strip()))
     await interaction.response.send_message(
-        f"✅ تم إضافة حساب لـ **{نوع}** ({qty+1}/10)", ephemeral=True)
+        f"✅ تم إضافة حساب لـ **{name}** ({qty+1}/10)", ephemeral=True)
 
-@bot.tree.command(name="spoints", description="💰 اعرض رصيد نقاطك أو نقاط شخص ثاني")
-@app_commands.describe(مستخدم="المستخدم (اختياري)")
-async def slash_spoints(interaction: discord.Interaction, مستخدم: Optional[discord.Member] = None):
-    target = مستخدم or interaction.user
+@bot.tree.command(name="spoints", description="💰 اعرض رصيد النقاط")
+@app_commands.describe(member="المستخدم (اختياري)")
+async def slash_spoints(interaction: discord.Interaction, member: Optional[discord.Member] = None):
+    target = member or interaction.user
     pts    = store_get_points(str(target.id))
     label  = "رصيدك" if target.id == interaction.user.id else f"رصيد {target.display_name}"
     e = discord.Embed(title="💰 رصيد النقاط", color=0x5865F2,
@@ -3004,19 +3005,34 @@ async def slash_spoints(interaction: discord.Interaction, مستخدم: Optional
     await interaction.response.send_message(embed=e, ephemeral=True)
 
 @bot.tree.command(name="sremoveaccount", description="🗑️ احذف حساب من المخزون")
-@app_commands.describe(نوع="اسم النوع", رقم="رقم الحساب (1 = الأول)")
+@app_commands.describe(name="اسم النوع", number="رقم الحساب (1 = الأول)")
 @app_commands.checks.has_permissions(administrator=True)
-async def slash_sremoveaccount(interaction: discord.Interaction, نوع: str, رقم: int):
-    tk   = نوع.lower().strip().replace(" ", "_")
+async def slash_sremoveaccount(interaction: discord.Interaction, name: str, number: int):
+    tk   = name.lower().strip().replace(" ", "_")
     rows = db_q("SELECT id, account FROM store_accounts WHERE type_key=? ORDER BY id LIMIT 20", (tk,), fetch="all") or []
     if not rows:
-        return await interaction.response.send_message(f"❌ لا توجد حسابات في **{نوع}**", ephemeral=True)
-    idx = رقم - 1
+        return await interaction.response.send_message(f"❌ لا توجد حسابات في **{name}**", ephemeral=True)
+    idx = number - 1
     if idx < 0 or idx >= len(rows):
         return await interaction.response.send_message(f"❌ الرقم غير صحيح (1 - {len(rows)})", ephemeral=True)
     acc_id, account = rows[idx]
     db_q("DELETE FROM store_accounts WHERE id=?", (acc_id,))
     await interaction.response.send_message(f"✅ تم حذف: `{account}`", ephemeral=True)
+
+@bot.tree.command(name="ssync", description="🔄 سجّل أوامر البوت (للأدمن)")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_ssync(interaction: discord.Interaction):
+    await interaction.response.defer(ephemeral=True)
+    total = 0
+    try:
+        synced = await bot.tree.sync(guild=interaction.guild)
+        total += len(synced)
+    except Exception as e:
+        return await interaction.followup.send(f"❌ فشل: {e}", ephemeral=True)
+    try:
+        await bot.tree.sync()
+    except: pass
+    await interaction.followup.send(f"✅ تم تسجيل **{total}** أمر!", ephemeral=True)
 
 
 # ═══════════════════════════════════════════════════════════════
