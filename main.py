@@ -2844,22 +2844,23 @@ class StorePanelView(discord.ui.View):
 
 # ─── أوامر prefix تبدأ بـ s. ─────────────────────────────────
 
+
 @bot.listen('on_message')
 async def store_prefix_handler(msg: discord.Message):
-    if msg.author.bot or not msg.content.startswith('s.'):
+    if msg.author.bot or not msg.content.startswith('!'):
         return
 
-    parts = msg.content[2:].strip().split()
+    parts = msg.content[1:].strip().split()
     if not parts:
         return
     cmd = parts[0].lower()
 
-    # s.نقاط @مستخدم عدد
+    # !نقاط @مستخدم عدد — للأدمن فقط
     if cmd == 'نقاط':
-        if msg.author.username not in STORE_POINTS_ADMINS and str(msg.author.id) != str(ADMIN_ID if 'ADMIN_ID' in dir() else ''):
+        if msg.author.username not in STORE_POINTS_ADMINS:
             return await msg.reply("❌ هذا الأمر للأدمن فقط")
         if not msg.mentions:
-            return await msg.reply("❌ الاستخدام: `s.نقاط @مستخدم عدد_النقاط`\nمثال: `s.نقاط @أحمد 50`")
+            return await msg.reply("❌ الاستخدام: `!نقاط @مستخدم عدد`\nمثال: `!نقاط @أحمد 50`")
         try:
             amount = int(parts[2]) if len(parts) > 2 else int(parts[1])
         except (ValueError, IndexError):
@@ -2880,7 +2881,7 @@ async def store_prefix_handler(msg: discord.Message):
             await target.send(embed=dm_e)
         except: pass
 
-    # s.رصيد
+    # !رصيد — أي شخص يشوف رصيده
     elif cmd == 'رصيد':
         target = msg.mentions[0] if msg.mentions else msg.author
         pts = store_get_points(str(target.id))
@@ -2889,17 +2890,38 @@ async def store_prefix_handler(msg: discord.Message):
             description=f"{label}: **{pts} نقطة**")
         await msg.reply(embed=e)
 
-    # s.مخزون
+    # !مخزون — العدد فقط للعموم
     elif cmd == 'مخزون':
         types = store_get_types()
-        e = discord.Embed(title="📦 المخزون الكامل", color=0x2ECC71)
+        e = discord.Embed(title="📦 المخزون", color=0x2ECC71)
         if not types:
             e.description = "لا توجد أنواع مضافة بعد"
         else:
             for tk, dn, price in types:
                 qty = store_get_account_count(tk)
-                e.add_field(name=dn, value=f"{qty}/10 حساب | {price}🪙", inline=True)
+                status = "✅ متوفر (" + str(qty) + ")" if qty > 0 else "❌ نافد"
+                e.add_field(name=dn, value=status + "\n" + str(price) + "🪙 للحساب", inline=True)
         await msg.reply(embed=e)
+
+    # !حسابات نوع — للأدمن فقط، يبعث الحسابات بالخاص
+    elif cmd == 'حسابات':
+        if msg.author.username not in STORE_POINTS_ADMINS:
+            return await msg.reply("❌ هذا الأمر للأدمن فقط")
+        if len(parts) < 2:
+            return await msg.reply("❌ الاستخدام: `!حسابات اسم_النوع`")
+        tk = parts[1].lower().strip()
+        rows = db_q("SELECT id, account FROM store_accounts WHERE type_key=? ORDER BY id", (tk,), fetch="all") or []
+        if not rows:
+            return await msg.reply(f"❌ لا توجد حسابات في **{tk}**")
+        lines = [str(i+1) + ". `" + acc + "`" for i, (_, acc) in enumerate(rows)]
+        e = discord.Embed(title="🔑 حسابات " + tk, color=0xE67E22,
+            description="\n".join(lines))
+        e.set_footer(text="⚠️ هذه المعلومات سرية")
+        try:
+            await msg.author.send(embed=e)
+            await msg.reply("📥 تم إرسال الحسابات بالخاص")
+        except:
+            await msg.reply(embed=e, delete_after=15)
 
 # ─── Slash Commands تبدأ بـ s ────────────────────────────────
 
