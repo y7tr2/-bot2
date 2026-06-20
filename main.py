@@ -93,6 +93,13 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS chatgpt (
         guild_id TEXT PRIMARY KEY, channel_id TEXT, enabled INTEGER DEFAULT 0,
         adab INTEGER DEFAULT 5)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS store_types (\n        type_key TEXT PRIMARY KEY, display_name TEXT, price_points INTEGER DEFAULT 10)""")\n    c.execute("""CREATE TABLE IF NOT EXISTS store_points (\n        user_id TEXT PRIMARY KEY, points INTEGER DEFAULT 0)""")\n    c.execute("""CREATE TABLE IF NOT EXISTS store_accounts (\n        id INTEGER PRIMARY KEY AUTOINCREMENT, type_key TEXT, account TEXT)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS store_types (
+        type_key TEXT PRIMARY KEY, display_name TEXT, price_points INTEGER DEFAULT 10)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS store_points (
+        user_id TEXT PRIMARY KEY, points INTEGER DEFAULT 0)""")
+    c.execute("""CREATE TABLE IF NOT EXISTS store_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, type_key TEXT, account TEXT)""")
     for col in [("tickets","ticket_type","TEXT DEFAULT 'استفسار'"),
                 ("tickets","opened_at","TEXT"),("tickets","closed_by","TEXT"),
                 ("tickets","close_reason","TEXT"),("tickets","closed_at","TEXT"),
@@ -2710,6 +2717,285 @@ async def slash_adab_set(interaction: discord.Interaction, level: int):
     }
     label = labels.get(level, str(level))
     await interaction.response.send_message(f"✅ مستوى الأدب تم ضبطه على **{level}/10** — {label}")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  🏪 نظام المتجر — أوامر تبدأ بـ s.
+# ═══════════════════════════════════════════════════════════════
+
+STORE_POINTS_ADMINS = ['1n7g', 'y.7tr2']  # فقط هؤلاء يقدرون يضيفون نقاط
+
+# ─── دوال مساعدة للمتجر ──────────────────────────────────────
+
+def store_get_points(user_id: str) -> int:
+    r = db_q("SELECT points FROM store_points WHERE user_id=?", (user_id,), fetch="one")
+    return r[0] if r else 0
+
+def store_add_points(user_id: str, amount: int) -> int:
+    existing = db_q("SELECT points FROM store_points WHERE user_id=?", (user_id,), fetch="one")
+    if existing:
+        db_q("UPDATE store_points SET points=points+? WHERE user_id=?", (amount, user_id))
+    else:
+        db_q("INSERT INTO store_points (user_id, points) VALUES (?,?)", (user_id, amount))
+    r = db_q("SELECT points FROM store_points WHERE user_id=?", (user_id,), fetch="one")
+    return r[0] if r else 0
+
+def store_deduct_points(user_id: str, amount: int) -> bool:
+    current = store_get_points(user_id)
+    if current < amount:
+        return False
+    db_q("UPDATE store_points SET points=points-? WHERE user_id=?", (amount, user_id))
+    return True
+
+def store_get_types():
+    return db_q("SELECT type_key, display_name, price_points FROM store_types ORDER BY display_name", fetch="all") or []
+
+def store_get_account_count(type_key: str) -> int:
+    r = db_q("SELECT COUNT(*) FROM store_accounts WHERE type_key=?", (type_key,), fetch="one")
+    return r[0] if r else 0
+
+def store_build_panel_embed():
+    types = store_get_types()
+    e = discord.Embed(
+        title="🏪 متجر الحسابات",
+        color=0x5865F2,
+        description=(
+            "> اضغط على نوع الحساب الذي تريده\n"
+            "> لازم تملك النقاط الكافية قبل الشراء\n\n"
+            "**كيف تشتري نقاط؟**\n"
+            "> ١- افتح تكت وقول «أبي نقاط»\n"
+            "> ٢- ادفع وراسلنا صورة التحويل\n\n"
+            "**بعد الشراء:**\n"
+            "> البوت يرسل لك الحساب بالخاص فوراً 📥"
+        )
+    )
+    if not types:
+        e.add_field(name="📦 الأنواع", value="`لا توجد أنواع بعد`")
+    else:
+        lines = []
+        for tk, dn, price in types:
+            qty = store_get_account_count(tk)
+            status = f"✅ ({qty})" if qty > 0 else "❌ نافد"
+            lines.append(f"**{dn}** — {price} نقطة — {status}")
+        e.add_field(name="📋 الأنواع المتاحة", value="\n".join(lines), inline=False)
+    e.set_footer(text="Crown Market • لأي استفسار افتح تكت")
+    return e
+
+# ─── View أزرار البانل ────────────────────────────────────────
+
+class StorePanelView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+        types = store_get_types()
+        for tk, dn, price in types:
+            qty = store_get_account_count(tk)
+            btn = discord.ui.Button(
+                label=f"{dn} • {price}🪙",
+                custom_id=f"store_buy_{tk}",
+                style=discord.ButtonStyle.primary if qty > 0 else discord.ButtonStyle.secondary,
+                disabled=(qty == 0)
+            )
+            btn.callback = self.make_callback(tk, dn, price)
+            self.add_item(btn)
+
+    def make_callback(self, type_key, display_name, price):
+        async def callback(interaction: discord.Interaction):
+            uid = str(interaction.user.id)
+            pts = store_get_points(uid)
+            if pts < price:
+                return await interaction.response.send_message(
+                    f"❌ نقاطك غير كافية!\nرصيدك: **{pts}** نقطة | المطلوب: **{price}** نقطة\n\n> افتح تكت لشراء نقاط",
+                    ephemeral=True
+                )
+            row = db_q("SELECT id, account FROM store_accounts WHERE type_key=? LIMIT 1", (type_key,), fetch="one")
+            if not row:
+                return await interaction.response.send_message("❌ المخزون فارغ الحين، ترقب الإعادة!", ephemeral=True)
+
+            acc_id, account = row
+            db_q("DELETE FROM store_accounts WHERE id=?", (acc_id,))
+            ok = store_deduct_points(uid, price)
+            if not ok:
+                db_q("INSERT INTO store_accounts (type_key, account) VALUES (?,?)", (type_key, account))
+                return await interaction.response.send_message("❌ حدث خطأ في الرصيد، حاول مرة ثانية", ephemeral=True)
+
+            remaining = store_get_points(uid)
+            dm_embed = discord.Embed(title="✅ تم الشراء بنجاح!", color=0x57F287)
+            dm_embed.add_field(name="📦 النوع", value=f"`{display_name}`", inline=True)
+            dm_embed.add_field(name="💰 المخصوم", value=f"{price} نقطة", inline=True)
+            dm_embed.add_field(name="💳 المتبقي", value=f"{remaining} نقطة", inline=True)
+            dm_embed.add_field(name="🔑 الحساب", value=f"```\n{account}\n```", inline=False)
+            dm_embed.set_footer(text="Crown Market • شكراً لشرائك")
+            dm_embed.timestamp = datetime.datetime.utcnow()
+
+            try:
+                await interaction.user.send(embed=dm_embed)
+                await interaction.response.send_message(
+                    f"✅ تم! الحساب أُرسل لك بالخاص 📥\nرصيدك المتبقي: **{remaining} نقطة**",
+                    ephemeral=True
+                )
+            except discord.Forbidden:
+                db_q("INSERT INTO store_accounts (type_key, account) VALUES (?,?)", (type_key, account))
+                store_add_points(uid, price)
+                await interaction.response.send_message(
+                    "⚠️ خاصك مغلق! فعّل الرسائل الخاصة من إعدادات الديسكورد ثم حاول مرة ثانية",
+                    ephemeral=True
+                )
+        return callback
+
+# ─── أوامر prefix تبدأ بـ s. ─────────────────────────────────
+
+@bot.listen('on_message')
+async def store_prefix_handler(msg: discord.Message):
+    if msg.author.bot or not msg.content.startswith('s.'):
+        return
+
+    parts = msg.content[2:].strip().split()
+    if not parts:
+        return
+    cmd = parts[0].lower()
+
+    # s.نقاط @مستخدم عدد
+    if cmd == 'نقاط':
+        if msg.author.username not in STORE_POINTS_ADMINS and str(msg.author.id) != str(ADMIN_ID if 'ADMIN_ID' in dir() else ''):
+            return await msg.reply("❌ هذا الأمر للأدمن فقط")
+        if not msg.mentions:
+            return await msg.reply("❌ الاستخدام: `s.نقاط @مستخدم عدد_النقاط`\nمثال: `s.نقاط @أحمد 50`")
+        try:
+            amount = int(parts[2]) if len(parts) > 2 else int(parts[1])
+        except (ValueError, IndexError):
+            return await msg.reply("❌ اكتب عدد النقاط بعد اسم المستخدم")
+        if amount <= 0:
+            return await msg.reply("❌ العدد لازم يكون أكبر من صفر")
+        target = msg.mentions[0]
+        new_total = store_add_points(str(target.id), amount)
+        e = discord.Embed(title="✅ تم إضافة النقاط", color=0x57F287)
+        e.add_field(name="المستخدم", value=f"<@{target.id}>", inline=True)
+        e.add_field(name="النقاط المضافة", value=f"+{amount}", inline=True)
+        e.add_field(name="الرصيد الكلي", value=f"{new_total} نقطة", inline=True)
+        e.timestamp = datetime.datetime.utcnow()
+        await msg.reply(embed=e)
+        try:
+            dm_e = discord.Embed(title="🎉 تم إضافة نقاط!", color=0x57F287,
+                description=f"تم إضافة **{amount} نقطة** لرصيدك\nرصيدك الكلي: **{new_total} نقطة**")
+            await target.send(embed=dm_e)
+        except: pass
+
+    # s.رصيد
+    elif cmd == 'رصيد':
+        target = msg.mentions[0] if msg.mentions else msg.author
+        pts = store_get_points(str(target.id))
+        label = "رصيدك" if target.id == msg.author.id else f"رصيد {target.display_name}"
+        e = discord.Embed(title="💰 رصيد النقاط", color=0x5865F2,
+            description=f"{label}: **{pts} نقطة**")
+        await msg.reply(embed=e)
+
+    # s.مخزون
+    elif cmd == 'مخزون':
+        types = store_get_types()
+        e = discord.Embed(title="📦 المخزون الكامل", color=0x2ECC71)
+        if not types:
+            e.description = "لا توجد أنواع مضافة بعد"
+        else:
+            for tk, dn, price in types:
+                qty = store_get_account_count(tk)
+                e.add_field(name=dn, value=f"{qty}/10 حساب | {price}🪙", inline=True)
+        await msg.reply(embed=e)
+
+# ─── Slash Commands تبدأ بـ s ────────────────────────────────
+
+@bot.tree.command(name="ssetup", description="🏪 أرسل بانل المتجر في القناة الحالية")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_ssetup(interaction: discord.Interaction):
+    types = store_get_types()
+    if not types:
+        return await interaction.response.send_message(
+            "❌ لا توجد أنواع بعد! أضف نوعاً أولاً بـ `/saddtype`", ephemeral=True)
+    embed = store_build_panel_embed()
+    view  = StorePanelView()
+    await interaction.channel.send(embed=embed, view=view)
+    await interaction.response.send_message("✅ تم إرسال البانل", ephemeral=True)
+
+@bot.tree.command(name="sstock", description="📦 عرض عدد الحسابات المتاحة")
+async def slash_sstock(interaction: discord.Interaction):
+    types = store_get_types()
+    e = discord.Embed(title="📦 المخزون", color=0x2ECC71)
+    if not types:
+        e.description = "لا توجد أنواع مضافة بعد"
+    else:
+        for tk, dn, price in types:
+            qty = store_get_account_count(tk)
+            e.add_field(name=dn, value=f"{qty}/10 | {price}🪙", inline=True)
+    await interaction.response.send_message(embed=e, ephemeral=True)
+
+@bot.tree.command(name="saddtype", description="➕ أضف نوع حساب جديد وحدد سعره")
+@app_commands.describe(نوع="اسم النوع مثال: Roblox", سعر="السعر بالنقاط")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_saddtype(interaction: discord.Interaction, نوع: str, سعر: int):
+    if سعر < 1:
+        return await interaction.response.send_message("❌ السعر لازم يكون 1 على الأقل", ephemeral=True)
+    tk = نوع.lower().strip().replace(" ", "_")
+    existing = db_q("SELECT type_key FROM store_types WHERE type_key=?", (tk,), fetch="one")
+    if existing:
+        db_q("UPDATE store_types SET display_name=?, price_points=? WHERE type_key=?", (نوع, سعر, tk))
+        await interaction.response.send_message(f"✅ تم تحديث **{نوع}** — السعر الجديد: **{سعر} نقطة**", ephemeral=True)
+    else:
+        db_q("INSERT INTO store_types (type_key, display_name, price_points) VALUES (?,?,?)", (tk, نوع, سعر))
+        await interaction.response.send_message(f"✅ تم إضافة نوع **{نوع}** بسعر **{سعر} نقطة**", ephemeral=True)
+
+@bot.tree.command(name="sremovetype", description="🗑️ احذف نوع حساب")
+@app_commands.describe(نوع="اسم النوع")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_sremovetype(interaction: discord.Interaction, نوع: str):
+    tk = نوع.lower().strip().replace(" ", "_")
+    r = db_q("SELECT type_key FROM store_types WHERE type_key=?", (tk,), fetch="one")
+    if not r:
+        return await interaction.response.send_message(f"❌ النوع **{نوع}** غير موجود", ephemeral=True)
+    db_q("DELETE FROM store_types WHERE type_key=?", (tk,))
+    db_q("DELETE FROM store_accounts WHERE type_key=?", (tk,))
+    await interaction.response.send_message(f"✅ تم حذف **{نوع}** وكل حساباته", ephemeral=True)
+
+@bot.tree.command(name="sadd", description="📥 أضف حساب لنوع معين (الحد 10)")
+@app_commands.describe(نوع="اسم النوع", حساب="يوزر:باس")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_sadd(interaction: discord.Interaction, نوع: str, حساب: str):
+    tk = نوع.lower().strip().replace(" ", "_")
+    r = db_q("SELECT type_key FROM store_types WHERE type_key=?", (tk,), fetch="one")
+    if not r:
+        return await interaction.response.send_message(
+            f"❌ النوع **{نوع}** غير موجود، أضفه أولاً بـ `/saddtype`", ephemeral=True)
+    qty = store_get_account_count(tk)
+    if qty >= 10:
+        return await interaction.response.send_message(
+            f"❌ المخزون ممتلئ! الحد الأقصى 10 حسابات لكل نوع", ephemeral=True)
+    db_q("INSERT INTO store_accounts (type_key, account) VALUES (?,?)", (tk, حساب.strip()))
+    await interaction.response.send_message(
+        f"✅ تم إضافة حساب لـ **{نوع}** ({qty+1}/10)", ephemeral=True)
+
+@bot.tree.command(name="spoints", description="💰 اعرض رصيد نقاطك أو نقاط شخص ثاني")
+@app_commands.describe(مستخدم="المستخدم (اختياري)")
+async def slash_spoints(interaction: discord.Interaction, مستخدم: Optional[discord.Member] = None):
+    target = مستخدم or interaction.user
+    pts    = store_get_points(str(target.id))
+    label  = "رصيدك" if target.id == interaction.user.id else f"رصيد {target.display_name}"
+    e = discord.Embed(title="💰 رصيد النقاط", color=0x5865F2,
+        description=f"{label}: **{pts} نقطة**")
+    await interaction.response.send_message(embed=e, ephemeral=True)
+
+@bot.tree.command(name="sremoveaccount", description="🗑️ احذف حساب من المخزون")
+@app_commands.describe(نوع="اسم النوع", رقم="رقم الحساب (1 = الأول)")
+@app_commands.checks.has_permissions(administrator=True)
+async def slash_sremoveaccount(interaction: discord.Interaction, نوع: str, رقم: int):
+    tk   = نوع.lower().strip().replace(" ", "_")
+    rows = db_q("SELECT id, account FROM store_accounts WHERE type_key=? ORDER BY id LIMIT 20", (tk,), fetch="all") or []
+    if not rows:
+        return await interaction.response.send_message(f"❌ لا توجد حسابات في **{نوع}**", ephemeral=True)
+    idx = رقم - 1
+    if idx < 0 or idx >= len(rows):
+        return await interaction.response.send_message(f"❌ الرقم غير صحيح (1 - {len(rows)})", ephemeral=True)
+    acc_id, account = rows[idx]
+    db_q("DELETE FROM store_accounts WHERE id=?", (acc_id,))
+    await interaction.response.send_message(f"✅ تم حذف: `{account}`", ephemeral=True)
+
 
 # ═══════════════════════════════════════════════════════════════
 #  تشغيل البوت
