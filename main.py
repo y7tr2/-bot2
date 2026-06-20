@@ -2845,7 +2845,6 @@ class StorePanelView(discord.ui.View):
 # ─── أوامر prefix تبدأ بـ s. ─────────────────────────────────
 
 
-@bot.listen('on_message')
 async def store_prefix_handler(msg: discord.Message):
     if msg.author.bot or not msg.content.startswith('!'):
         return
