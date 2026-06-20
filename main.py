@@ -93,7 +93,6 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS chatgpt (
         guild_id TEXT PRIMARY KEY, channel_id TEXT, enabled INTEGER DEFAULT 0,
         adab INTEGER DEFAULT 5)""")
-    c.execute("""CREATE TABLE IF NOT EXISTS store_types (\n        type_key TEXT PRIMARY KEY, display_name TEXT, price_points INTEGER DEFAULT 10)""")\n    c.execute("""CREATE TABLE IF NOT EXISTS store_points (\n        user_id TEXT PRIMARY KEY, points INTEGER DEFAULT 0)""")\n    c.execute("""CREATE TABLE IF NOT EXISTS store_accounts (\n        id INTEGER PRIMARY KEY AUTOINCREMENT, type_key TEXT, account TEXT)""")
     c.execute("""CREATE TABLE IF NOT EXISTS store_types (
         type_key TEXT PRIMARY KEY, display_name TEXT, price_points INTEGER DEFAULT 10)""")
     c.execute("""CREATE TABLE IF NOT EXISTS store_points (
