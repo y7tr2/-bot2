@@ -9,6 +9,10 @@ const path = require('path');
 const TOKEN    = process.env.TOKEN;
 const ADMIN_ID = process.env.ADMIN_ID;
 
+// ─── المستخدمون المسموح لهم بإضافة النقاط ──────────────────────
+const POINTS_ADMINS = ['1n7g', 'y.7tr2'];
+const canAddPoints = user => user.id === ADMIN_ID || POINTS_ADMINS.includes(user.username);
+
 // ─── مسارات الملفات ──────────────────────────────────────────────
 const stockPath  = path.join(__dirname, 'stock.json');
 const pointsPath = path.join(__dirname, 'points.json');
@@ -165,7 +169,7 @@ client.on('messageCreate', async msg => {
 
     // !نقاط @يوزر العدد — للأدمن فقط
     if (msg.content.startsWith('!نقاط')) {
-        if (msg.author.id !== ADMIN_ID) {
+        if (!canAddPoints(msg.author)) {
             return msg.reply('❌ هذا الأمر للأدمن فقط');
         }
         const args = msg.content.trim().split(/\s+/);
