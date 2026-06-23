@@ -73,7 +73,12 @@ def init_db():
         close_reason TEXT, closed_at TEXT)""")
     c.execute("""CREATE TABLE IF NOT EXISTS protection (
         guild_id TEXT PRIMARY KEY, enabled INTEGER DEFAULT 1,
-        punishment TEXT DEFAULT 'ban', whitelist TEXT DEFAULT '[]')""")
+        punishment TEXT DEFAULT 'ban', whitelist TEXT DEFAULT '[]',
+        threshold INTEGER DEFAULT 3, window_seconds INTEGER DEFAULT 60)""")
+    try: c.execute("ALTER TABLE protection ADD COLUMN threshold INTEGER DEFAULT 3")
+    except: pass
+    try: c.execute("ALTER TABLE protection ADD COLUMN window_seconds INTEGER DEFAULT 60")
+    except: pass
     c.execute("""CREATE TABLE IF NOT EXISTS dhikr (
         guild_id TEXT PRIMARY KEY, channel_id TEXT,
         interval_seconds INTEGER DEFAULT 10, enabled INTEGER DEFAULT 0)""")
@@ -290,54 +295,60 @@ async def check_auctions():
 @bot.event
 async def on_guild_channel_delete(channel):
     guild = channel.guild
-    row = db_q("SELECT enabled,punishment,whitelist FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
     if not row or not row[0]: return
-    wl = json.loads(row[2] or "[]")
+    wl = json.loads(row[2] or "[]"); threshold = row[3] or 3; window = row[4] or 60
     try:
         async for e in guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_delete):
             if e.user.id == bot.user.id or str(e.user.id) in wl: return
             uid = str(guild.id)
             recent_deletions.setdefault(uid, {"channels":[],"roles":[]})
             recent_deletions[uid]["channels"].append({"user":e.user.id,"time":time.time()})
-            recent_deletions[uid]["channels"] = [d for d in recent_deletions[uid]["channels"] if time.time()-d["time"]<60]
-            if len([d for d in recent_deletions[uid]["channels"] if d["user"]==e.user.id]) >= 1:
+            recent_deletions[uid]["channels"] = [d for d in recent_deletions[uid]["channels"] if time.time()-d["time"]<window]
+            if len([d for d in recent_deletions[uid]["channels"] if d["user"]==e.user.id]) >= threshold:
                 await apply_punishment(guild, e.user, row[1], f"حذف قناة: #{channel.name}")
     except Exception as ex: print(f"prot-ch:{ex}")
 
 @bot.event
 async def on_guild_role_delete(role):
     guild = role.guild
-    row = db_q("SELECT enabled,punishment,whitelist FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
     if not row or not row[0]: return
-    wl = json.loads(row[2] or "[]")
+    wl = json.loads(row[2] or "[]"); threshold = row[3] or 3; window = row[4] or 60
     try:
         async for e in guild.audit_logs(limit=1, action=discord.AuditLogAction.role_delete):
             if e.user.id == bot.user.id or str(e.user.id) in wl: return
             uid = str(guild.id)
             recent_deletions.setdefault(uid, {"channels":[],"roles":[]})
             recent_deletions[uid]["roles"].append({"user":e.user.id,"time":time.time()})
-            recent_deletions[uid]["roles"] = [d for d in recent_deletions[uid]["roles"] if time.time()-d["time"]<60]
-            if len([d for d in recent_deletions[uid]["roles"] if d["user"]==e.user.id]) >= 1:
+            recent_deletions[uid]["roles"] = [d for d in recent_deletions[uid]["roles"] if time.time()-d["time"]<window]
+            if len([d for d in recent_deletions[uid]["roles"] if d["user"]==e.user.id]) >= threshold:
                 await apply_punishment(guild, e.user, row[1], f"حذف رتبة: {role.name}")
     except Exception as ex: print(f"prot-role:{ex}")
 
 @bot.event
 async def on_member_ban(guild, user):
-    row = db_q("SELECT enabled,punishment,whitelist FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
     if not row or not row[0]: return
-    wl = json.loads(row[2] or "[]")
+    wl = json.loads(row[2] or "[]"); threshold = row[3] or 3; window = row[4] or 60
     try:
         async for e in guild.audit_logs(limit=1, action=discord.AuditLogAction.ban):
             if e.user.id == bot.user.id or str(e.user.id) in wl: return
-            await apply_punishment(guild, e.user, row[1], f"باند غير مصرح: {user}")
+            uid = str(guild.id)
+            recent_deletions.setdefault(uid, {"bans":[]})
+            recent_deletions[uid].setdefault("bans", [])
+            recent_deletions[uid]["bans"].append({"user":e.user.id,"time":time.time()})
+            recent_deletions[uid]["bans"] = [d for d in recent_deletions[uid]["bans"] if time.time()-d["time"]<window]
+            if len([d for d in recent_deletions[uid]["bans"] if d["user"]==e.user.id]) >= threshold:
+                await apply_punishment(guild, e.user, row[1], f"باند جماعي غير مصرح")
     except Exception as ex: print(f"prot-ban:{ex}")
 
 @bot.event
 async def on_member_remove(member):
     guild = member.guild
-    row = db_q("SELECT enabled,punishment,whitelist FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
     if not row or not row[0]: return
-    wl = json.loads(row[2] or "[]")
+    wl = json.loads(row[2] or "[]"); threshold = row[3] or 3; window = row[4] or 60
     try:
         async for e in guild.audit_logs(limit=1, action=discord.AuditLogAction.kick):
             if e.user.id == bot.user.id or str(e.user.id) in wl: return
@@ -346,15 +357,15 @@ async def on_member_remove(member):
             recent_deletions.setdefault(uid, {"channels":[],"roles":[],"kicks":[]})
             recent_deletions[uid].setdefault("kicks", [])
             recent_deletions[uid]["kicks"].append({"user":e.user.id,"time":time.time()})
-            recent_deletions[uid]["kicks"] = [d for d in recent_deletions[uid]["kicks"] if time.time()-d["time"]<60]
-            if len([d for d in recent_deletions[uid]["kicks"] if d["user"]==e.user.id]) >= 2:
+            recent_deletions[uid]["kicks"] = [d for d in recent_deletions[uid]["kicks"] if time.time()-d["time"]<window]
+            if len([d for d in recent_deletions[uid]["kicks"] if d["user"]==e.user.id]) >= threshold:
                 await apply_punishment(guild, e.user, row[1], f"كيك جماعي غير مصرح")
     except Exception as ex: print(f"prot-kick:{ex}")
 
 @bot.event
 async def on_webhooks_update(channel):
     guild = channel.guild
-    row = db_q("SELECT enabled,punishment,whitelist FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
     if not row or not row[0]: return
     wl = json.loads(row[2] or "[]")
     try:
@@ -366,9 +377,9 @@ async def on_webhooks_update(channel):
 @bot.event
 async def on_guild_channel_create(channel):
     guild = channel.guild
-    row = db_q("SELECT enabled,punishment,whitelist FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
     if not row or not row[0]: return
-    wl = json.loads(row[2] or "[]")
+    wl = json.loads(row[2] or "[]"); threshold = row[3] or 3; window = row[4] or 60
     try:
         async for e in guild.audit_logs(limit=1, action=discord.AuditLogAction.channel_create):
             if e.user.id == bot.user.id or str(e.user.id) in wl: return
@@ -376,8 +387,8 @@ async def on_guild_channel_create(channel):
             recent_deletions.setdefault(uid, {"channels":[],"roles":[],"kicks":[],"ch_creates":[]})
             recent_deletions[uid].setdefault("ch_creates", [])
             recent_deletions[uid]["ch_creates"].append({"user":e.user.id,"time":time.time()})
-            recent_deletions[uid]["ch_creates"] = [d for d in recent_deletions[uid]["ch_creates"] if time.time()-d["time"]<30]
-            if len([d for d in recent_deletions[uid]["ch_creates"] if d["user"]==e.user.id]) >= 3:
+            recent_deletions[uid]["ch_creates"] = [d for d in recent_deletions[uid]["ch_creates"] if time.time()-d["time"]<window]
+            if len([d for d in recent_deletions[uid]["ch_creates"] if d["user"]==e.user.id]) >= threshold:
                 await apply_punishment(guild, e.user, row[1], f"إنشاء قنوات مشبوه")
     except Exception as ex: print(f"prot-ch-create:{ex}")
 
@@ -1165,7 +1176,7 @@ def _owner_err(): return discord.Embed(description="❌ خاص بمالك الب
 def _ow(i): return i.user.name == BOT_OWNER
 def _ow_c(c): return c.author.name == BOT_OWNER
 
-owner_grp = app_commands.Group(name="ow", description="🔐 أوامر المالك")
+owner_grp = app_commands.Group(name="owner", description="‎")
 
 async def _get_g(interaction, sid):
     try: gid = int(sid)
@@ -1457,6 +1468,17 @@ async def alias_list(interaction: discord.Interaction):
 
 @bot.event
 async def on_member_join(member):
+    if member.bot:
+        row2 = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(member.guild.id),), fetch="one")
+        if row2 and row2[0]:
+            wl2 = json.loads(row2[2] or "[]")
+            try:
+                async for e in member.guild.audit_logs(limit=1, action=discord.AuditLogAction.bot_add):
+                    if e.user.id == bot.user.id or str(e.user.id) in wl2: break
+                    if (discord.utils.utcnow() - e.created_at).total_seconds() < 10:
+                        await apply_punishment(member.guild, e.user, row2[1], f"إضافة بوت غير مصرح: {member.name}")
+            except: pass
+        return
     row = db_q("SELECT role_id FROM autorole WHERE guild_id=?", (str(member.guild.id),), fetch="one")
     if row:
         r = member.guild.get_role(int(row[0]))
@@ -3033,6 +3055,69 @@ async def slash_ssync(interaction: discord.Interaction):
     except: pass
     await interaction.followup.send(f"✅ تم تسجيل **{total}** أمر!", ephemeral=True)
 
+
+
+# ─── حماية إضافية: منع إنشاء رتب بكثرة ──────────────────────
+@bot.event
+async def on_guild_role_create(role):
+    guild = role.guild
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?", (str(guild.id),), fetch="one")
+    if not row or not row[0]: return
+    wl = json.loads(row[2] or "[]"); threshold = row[3] or 3; window = row[4] or 60
+    try:
+        async for e in guild.audit_logs(limit=1, action=discord.AuditLogAction.role_create):
+            if e.user.id == bot.user.id or str(e.user.id) in wl: return
+            uid = str(guild.id)
+            recent_deletions.setdefault(uid, {})
+            recent_deletions[uid].setdefault("role_creates", [])
+            recent_deletions[uid]["role_creates"].append({"user":e.user.id,"time":time.time()})
+            recent_deletions[uid]["role_creates"] = [d for d in recent_deletions[uid]["role_creates"] if time.time()-d["time"]<window]
+            if len([d for d in recent_deletions[uid]["role_creates"] if d["user"]==e.user.id]) >= threshold:
+                await apply_punishment(guild, e.user, row[1], f"إنشاء رتب مشبوه")
+    except Exception as ex: print(f"prot-role-create:{ex}")
+
+# ─── أوامر ضبط الحماية ──────────────────────────────────────
+
+@bot.tree.command(name="protection-threshold", description="عدد المخالفات قبل العقوبة")
+@app_commands.describe(count="عدد المخالفات (1-10)")
+async def slash_prot_threshold(interaction: discord.Interaction, count: int):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌", ephemeral=True)
+    count = max(1, min(10, count))
+    db_upsert("protection", str(interaction.guild.id), threshold=count)
+    await interaction.response.send_message(
+        f"✅ العقوبة تُنفَّذ بعد **{count}** مخالفة", ephemeral=True)
+
+@bot.tree.command(name="protection-window", description="النافذة الزمنية لرصد المخالفات (ثانية)")
+@app_commands.describe(seconds="الثواني (10-300)")
+async def slash_prot_window(interaction: discord.Interaction, seconds: int):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌", ephemeral=True)
+    seconds = max(10, min(300, seconds))
+    db_upsert("protection", str(interaction.guild.id), window_seconds=seconds)
+    await interaction.response.send_message(
+        f"✅ نافذة الرصد: **{seconds}** ثانية", ephemeral=True)
+
+@bot.tree.command(name="protection-status", description="عرض إعدادات الحماية الحالية")
+async def slash_prot_status(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("❌", ephemeral=True)
+    row = db_q("SELECT enabled,punishment,whitelist,threshold,window_seconds FROM protection WHERE guild_id=?",
+               (str(interaction.guild.id),), fetch="one")
+    e = discord.Embed(title="🛡️ إعدادات الحماية", color=discord.Color.blue())
+    if not row:
+        e.description = "لم تُضبط إعدادات الحماية بعد"
+    else:
+        enabled, pun, wl_raw, thr, win = row
+        wl = json.loads(wl_raw or "[]")
+        punmap = {"ban":"🔨 باند","kick":"👢 طرد","timeout":"⏱️ تايم أوت","strip":"🃏 سحب رتب"}
+        e.add_field(name="الحالة", value="✅ مفعّلة" if enabled else "❌ موقوفة", inline=True)
+        e.add_field(name="العقوبة", value=punmap.get(pun, pun or "ban"), inline=True)
+        e.add_field(name="عدد المخالفات", value=f"{thr or 3} مخالفة", inline=True)
+        e.add_field(name="النافذة الزمنية", value=f"{win or 60} ثانية", inline=True)
+        e.add_field(name="الوايت ليست", value=f"{len(wl)} عضو", inline=True)
+    e.set_footer(text="protection-on/off • protection-punishment • protection-threshold • protection-window • protection-whitelist")
+    await interaction.response.send_message(embed=e, ephemeral=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  تشغيل البوت
