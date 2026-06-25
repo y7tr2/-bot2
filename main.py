@@ -3094,7 +3094,7 @@ async def slash_prot_status(interaction: discord.Interaction):
 # ═══════════════════════════════════════════════════════════════
 
 def _start_bot_thread():
-    import time as _time
+    import time as _time, os as _os
     global _last_error, _bot_started
     _bot_started = True
 
@@ -3105,39 +3105,37 @@ def _start_bot_thread():
 
     if not TOKEN:
         _last_error = "TOKEN_MISSING"
-        print("❌ TOKEN مفقود"); return
+        print("❌ TOKEN مفقود — أضف TOKEN في Render Environment"); return
 
     try:
         init_db(); print("✅ DB جاهز")
     except Exception as e:
         print(f"⚠️ DB: {e}")
 
-    attempt = 0
-    while True:
-        attempt += 1
-        print(f"⏳ محاولة الاتصال #{attempt} بـ Discord...")
-        try:
-            # bot.run() هو الطريقة الصحيحة — يدير الـ event loop نفسه
-            bot.run(TOKEN, log_handler=None, reconnect=True)
-            # لو وصلنا هنا = البوت أغلق بشكل طبيعي
-            print("✅ البوت أغلق بشكل طبيعي"); break
-        except discord.errors.LoginFailure:
-            _last_error = "TOKEN_INVALID"
-            print("❌ TOKEN خاطئ أو منتهي — جيب token جديد"); break
-        except discord.errors.PrivilegedIntentsRequired:
-            _last_error = "INTENTS_DISABLED"
-            print("❌ فعّل Privileged Intents في Developer Portal"); break
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            _last_error = str(e)
-            print(f"❌ خطأ: {e}")
-        wait = min(60 * attempt, 300)  # 1 دقيقة، 2، 3... حتى 5 دقائق كحد أقصى
-        print(f"⏳ إعادة المحاولة بعد {wait}ث...")
-        _time.sleep(wait)
+    # انتظر 10 ثوانٍ قبل الاتصال — يكسر حلقة rate limit عند إعادة التشغيل السريعة
+    print("⏳ انتظار 10ث...")
+    _time.sleep(10)
+
+    print("⏳ جاري الاتصال بـ Discord...")
+    try:
+        bot.run(TOKEN, log_handler=None, reconnect=True)
+        print("✅ البوت أغلق بشكل طبيعي")
+    except discord.errors.LoginFailure:
+        _last_error = "TOKEN_INVALID"
+        print("❌ TOKEN خاطئ أو منتهي")
+    except discord.errors.PrivilegedIntentsRequired:
+        _last_error = "INTENTS_DISABLED"
+        print("❌ فعّل Privileged Intents في Developer Portal")
+    except Exception as e:
+        _last_error = str(e)
+        print(f"❌ خطأ في الاتصال: {e}")
+        # انتظر 3 دقائق ثم أعد تشغيل العملية كاملاً — Render يعطينا bot object جديد نظيف
+        print("🔄 انتظار 3 دقائق ثم إعادة تشغيل كاملة...")
+        _time.sleep(180)
+        _os._exit(1)  # إعادة تشغيل كاملة = object نظيف جديد
 
 threading.Thread(target=_start_bot_thread, daemon=True).start()
 
-# Flask في main thread — يمنع الخروج ويمنع atexit من الاستدعاء المبكر
+# Flask في main thread
 print(f"🌐 Flask على port {_flask_port}")
 _app.run(host="0.0.0.0", port=_flask_port, use_reloader=False)
