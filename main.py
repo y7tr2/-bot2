@@ -10,6 +10,29 @@ _bot_started = False
 @_app.route("/")
 def _health(): return "OK", 200
 
+@_app.route("/force-sync")
+def _force_sync():
+    import asyncio as _aio
+    async def _do_sync():
+        total = 0
+        try:
+            s = await bot.tree.sync(); total += len(s)
+        except: pass
+        for g in bot.guilds:
+            try:
+                s = await bot.tree.sync(guild=g); total += len(s)
+            except: pass
+        return total
+    try:
+        loop = bot.loop
+        if loop and loop.is_running():
+            fut = _aio.run_coroutine_threadsafe(_do_sync(), loop)
+            n = fut.result(timeout=30)
+            return {"ok": True, "synced": n}, 200
+    except Exception as ex:
+        return {"ok": False, "error": str(ex)}, 500
+    return {"ok": False, "error": "loop not running"}, 500
+
 @_app.route("/status")
 def _status():
     try:
@@ -211,21 +234,23 @@ dhikr_channels = {}; recent_deletions = {}; bot.start_time = datetime.datetime.u
 
 @bot.event
 async def on_ready():
-    init_db(); print(f"✅ {bot.user}")
-    # تسجيل فوري لكل سيرفر (يظهر خلال ثوانٍ)
+    init_db(); print(f"✅ {bot.user} | {len(bot.guilds)} سيرفر")
+    # --- تسجيل الأوامر ---
+    # 1) Global sync أولاً
+    try:
+        g_synced = await bot.tree.sync()
+        print(f"✅ Global sync: {len(g_synced)} أمر")
+    except Exception as e:
+        print(f"⚠️ Global sync: {e}")
+    # 2) Per-guild sync فوري لكل سيرفر
     total = 0
     for guild in bot.guilds:
         try:
-            synced = await bot.tree.sync(guild=guild)
-            total += len(synced)
+            s = await bot.tree.sync(guild=guild)
+            total += len(s)
         except Exception as e:
-            print(f"❌ sync {guild.id}: {e}")
-    # تسجيل عالمي أيضاً (يأخذ ساعة لكن يغطي السيرفرات الجديدة)
-    try:
-        await bot.tree.sync()
-    except Exception as e:
-        print(f"❌ global sync: {e}")
-    print(f"✅ سُجّل {total} أمر على {len(bot.guilds)} سيرفر")
+            print(f"⚠️ guild sync {guild.id}: {e}")
+    print(f"✅ Guild sync: {total} أمر على {len(bot.guilds)} سيرفر")
     for t in [check_auctions, send_dhikr, self_ping]:
         if not t.is_running(): t.start()
 
