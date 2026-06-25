@@ -3103,50 +3103,51 @@ async def _bot_main():
     print("=" * 50)
 
     if not TOKEN:
-        _last_error = "TOKEN مفقود — روح Render → Environment → أضف TOKEN"
-        print(f"❌ {_last_error}")
-        return
+        _last_error = "TOKEN_MISSING"
+        print("❌ TOKEN مفقود"); return
 
     try:
-        init_db()
-        print("✅ DB جاهز")
+        init_db(); print("✅ DB جاهز")
     except Exception as e:
         print(f"⚠️ DB: {e}")
 
-    retry_delay = 5
-    for attempt in range(1, 6):
-        try:
-            print(f"⏳ محاولة الاتصال {attempt}/5...")
-            async with bot:
-                await bot.start(TOKEN)
-            break
-        except discord.errors.LoginFailure:
-            _last_error = "TOKEN خاطئ أو منتهي — جيب token جديد من Discord Developer Portal"
-            print(f"❌ {_last_error}"); break
-        except discord.errors.PrivilegedIntentsRequired:
-            _last_error = "فعّل Server Members + Message Content في Discord Developer Portal → Bot → Privileged Gateway Intents"
-            print(f"❌ {_last_error}"); break
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                wait = retry_delay * attempt
-                _last_error = f"Rate limit — ينتظر {wait}ث"
-                print(f"⚠️ Rate limit — ينتظر {wait}ث...")
-                await asyncio.sleep(wait)
-            else:
-                _last_error = str(e); print(f"❌ {e}"); break
-        except Exception as e:
-            _last_error = str(e)
-            wait = retry_delay * attempt
-            print(f"⚠️ خطأ ({e}) — إعادة المحاولة بعد {wait}ث")
-            await asyncio.sleep(wait)
+    print("⏳ جاري الاتصال بـ Discord...")
+    try:
+        async with bot:
+            await bot.start(TOKEN)
+    except discord.errors.LoginFailure:
+        _last_error = "TOKEN_INVALID"
+        print("❌ TOKEN خاطئ أو منتهي")
+    except discord.errors.PrivilegedIntentsRequired:
+        _last_error = "INTENTS_DISABLED"
+        print("❌ فعّل Privileged Intents في Developer Portal")
+    except Exception as e:
+        _last_error = str(e)
+        print(f"❌ {e}")
+        raise  # يرفع الخطأ عشان الـ thread يعيد التشغيل
 
 def _start_bot_thread():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(_bot_main())
-    finally:
-        loop.close()
+    import time as _time
+    attempt = 0
+    while True:
+        attempt += 1
+        print(f"🔄 بدء المحاولة #{attempt}")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_bot_main())
+        except Exception as e:
+            print(f"⚠️ crash: {e}")
+        finally:
+            try: loop.close()
+            except: pass
+        # لا تعيد التشغيل على أخطاء دائمة
+        if _last_error in ("TOKEN_MISSING", "TOKEN_INVALID", "INTENTS_DISABLED"):
+            print(f"❌ خطأ دائم ({_last_error}) — إيقاف"); break
+        # انتظر قبل الإعادة (30 ثانية)
+        wait = 30
+        print(f"⏳ إعادة تشغيل بعد {wait}ث...")
+        _time.sleep(wait)
 
 threading.Thread(target=_start_bot_thread, daemon=True).start()
 
