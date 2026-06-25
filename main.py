@@ -43,7 +43,7 @@ except Exception as _ie:
     print(f"❌ {_last_error}")
     threading.Event().wait()   # انتظر الأبد — Flask تبقى شغّالة
 
-TOKEN = os.getenv("TOKEN", "").strip()
+TOKEN = (os.getenv("TOKEN") or os.getenv("DISCORD_BOT_TOKEN", "")).strip()
 PREFIX = "y."
 RENDER_URL = os.getenv("RENDER_URL", "https://bot2-0hj7.onrender.com").strip()
 
@@ -86,7 +86,8 @@ def init_db():
         guild_id TEXT PRIMARY KEY, mention_role_ids TEXT DEFAULT '[]',
         category_id TEXT, title TEXT DEFAULT 'تذكرة دعم',
         mention_admin INTEGER DEFAULT 1,
-        ticket_types TEXT DEFAULT '["استفسار","شراء","شكوى","اقتراح","دعم فني"]')""")
+        ticket_types TEXT DEFAULT '["استفسار","شراء","شكوى","اقتراح","دعم فني"]',
+          description TEXT DEFAULT '', image_url TEXT DEFAULT '')""")
     c.execute("""CREATE TABLE IF NOT EXISTS afk (
         user_id TEXT, guild_id TEXT, reason TEXT DEFAULT 'غايب',
         timestamp TEXT, PRIMARY KEY (user_id, guild_id))""")
@@ -110,7 +111,9 @@ def init_db():
                 ("ticket_settings","mention_role_ids","TEXT DEFAULT '[]'"),
                 ("ticket_settings","ticket_types","TEXT DEFAULT '[]'"),
                 ("ticket_settings","close_reasons","TEXT DEFAULT '[]'"),
-                ("chatgpt","adab","INTEGER DEFAULT 5")]:
+                ("chatgpt","adab","INTEGER DEFAULT 5"),
+                  ("ticket_settings","description","TEXT DEFAULT ''"),
+                  ("ticket_settings","image_url","TEXT DEFAULT ''")]:
         try: c.execute(f"ALTER TABLE {col[0]} ADD COLUMN {col[1]} {col[2]}")
         except: pass
     conn.commit(); conn.close()
@@ -233,18 +236,6 @@ async def on_guild_join(guild):
         print(f"✅ sync {guild.name}: {len(synced)} أمر")
     except Exception as e:
         print(f"❌ sync {guild.name}: {e}")
-
-@bot.command(name="sync", aliases=["سجل"])
-@commands.is_owner()
-async def cmd_sync(ctx):
-    msg = await ctx.send("⏳ جاري تسجيل الأوامر...")
-    total = 0
-    for guild in bot.guilds:
-        try:
-            s = await bot.tree.sync(guild=guild)
-            total += len(s)
-        except: pass
-    await msg.edit(content=f"✅ تم تسجيل **{total}** أمر على **{len(bot.guilds)}** سيرفر!")
 
 @tasks.loop(seconds=10)
 async def send_dhikr():
@@ -625,22 +616,30 @@ class TicketManageView(discord.ui.View):
         await interaction.response.send_message(embed=e, view=TicketOptionsView(), ephemeral=True)
 
 @bot.tree.command(name="ticket-setup", description="إعداد التذاكر")
-@app_commands.describe(channel="القناة", title="العنوان", role1="رتبة 1", role2="رتبة 2", role3="رتبة 3", role4="رتبة 4", role5="رتبة 5")
-@app_commands.checks.has_permissions(administrator=True)
-async def ticket_setup(interaction: discord.Interaction, channel: discord.TextChannel,
-                       title: str = "تذكرة دعم",
-                       role1: Optional[discord.Role]=None, role2: Optional[discord.Role]=None,
-                       role3: Optional[discord.Role]=None, role4: Optional[discord.Role]=None,
-                       role5: Optional[discord.Role]=None):
-    roles = [r for r in [role1,role2,role3,role4,role5] if r]
-    role_ids = json.dumps([str(r.id) for r in roles])
-    db_upsert("ticket_settings", str(interaction.guild.id), mention_role_ids=role_ids, title=title, mention_admin=1)
-    e = discord.Embed(title=f"🎫 {title}", description="اضغط على الزر أدناه لفتح تذكرة.", color=0x5865F2)
-    if roles: e.add_field(name="🛡️ الإدارة المسؤولة", value=" | ".join(r.mention for r in roles))
-    await channel.send(embed=e, view=TicketView())
-    await interaction.response.send_message(f"✅ تذاكر جاهزة في {channel.mention}", ephemeral=True)
+  @app_commands.describe(channel="القناة", title="العنوان", description="وصف البانل (مثال: بيع فلوس، دعم فني...)", image_url="رابط صورة البانل", role1="رتبة 1", role2="رتبة 2", role3="رتبة 3", role4="رتبة 4", role5="رتبة 5")
+  @app_commands.checks.has_permissions(administrator=True)
+  async def ticket_setup(interaction: discord.Interaction, channel: discord.TextChannel,
+                         title: str = "تذكرة دعم",
+                         description: str = "اضغط على الزر أدناه لفتح تذكرة.",
+                         image_url: str = "",
+                         role1: Optional[discord.Role]=None, role2: Optional[discord.Role]=None,
+                         role3: Optional[discord.Role]=None, role4: Optional[discord.Role]=None,
+                         role5: Optional[discord.Role]=None):
+      roles = [r for r in [role1,role2,role3,role4,role5] if r]
+      role_ids = json.dumps([str(r.id) for r in roles])
+      db_upsert("ticket_settings", str(interaction.guild.id),
+                mention_role_ids=role_ids, title=title, mention_admin=1,
+                description=description, image_url=image_url)
+      e = discord.Embed(title=f"🎫 {title}", description=description, color=0x5865F2)
+      if image_url:
+          e.set_image(url=image_url)
+      if roles:
+          e.add_field(name="🛡️ الإدارة المسؤولة", value=" | ".join(r.mention for r in roles))
+      await channel.send(embed=e, view=TicketView())
+      await interaction.response.send_message(f"✅ تذاكر جاهزة في {channel.mention}", ephemeral=True)
 
-@bot.tree.command(name="ticket-category", description="كاتيغوري التذاكر")
+
+  @bot.tree.command(name="ticket-category", description="كاتيغوري التذاكر")
 @app_commands.describe(category="الكاتيغوري")
 @app_commands.checks.has_permissions(administrator=True)
 async def ticket_category(interaction: discord.Interaction, category: discord.CategoryChannel):
@@ -1258,6 +1257,19 @@ async def slash_owner(interaction: discord.Interaction,
     if not _ow(interaction):
         await interaction.response.send_message(embed=_owner_err(), ephemeral=True); return
     act = action.value
+
+    if act == "sync":
+        await interaction.response.send_message("⏳ جاري تسجيل الأوامر...", ephemeral=True)
+        total = 0
+        for gx in list(bot.guilds):
+            try:
+                s = await bot.tree.sync(guild=gx); total += len(s)
+            except: pass
+        try: await bot.tree.sync()
+        except: pass
+        try: await interaction.followup.send(f"✅ تم تسجيل **{total}** أمر على **{len(bot.guilds)}** سيرفر!", ephemeral=True)
+        except: pass
+        return
 
     if act == "leaveall":
         guilds = list(bot.guilds); n = 0
