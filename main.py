@@ -232,27 +232,30 @@ chatgpt_history = {}
 
 dhikr_channels = {}; recent_deletions = {}; bot.start_time = datetime.datetime.utcnow()
 
+_synced_once = False
+
 @bot.event
 async def on_ready():
-    init_db(); print(f"✅ {bot.user} | {len(bot.guilds)} سيرفر")
-    # --- تسجيل الأوامر ---
-    # 1) Global sync أولاً
-    try:
-        g_synced = await bot.tree.sync()
-        print(f"✅ Global sync: {len(g_synced)} أمر")
-    except Exception as e:
-        print(f"⚠️ Global sync: {e}")
-    # 2) Per-guild sync فوري لكل سيرفر
-    total = 0
-    for guild in bot.guilds:
-        try:
-            s = await bot.tree.sync(guild=guild)
-            total += len(s)
-        except Exception as e:
-            print(f"⚠️ guild sync {guild.id}: {e}")
-    print(f"✅ Guild sync: {total} أمر على {len(bot.guilds)} سيرفر")
+    global _synced_once
+    init_db()
+    print(f"✅ {bot.user} | {len(bot.guilds)} سيرفر")
+    # تشغيل المهام
     for t in [check_auctions, send_dhikr, self_ping]:
         if not t.is_running(): t.start()
+    # sync مرة واحدة فقط عند أول تشغيل
+    if not _synced_once:
+        _synced_once = True
+        await asyncio.sleep(3)  # انتظر قليلاً قبل الـ sync
+        try:
+            synced = await bot.tree.sync()
+            print(f"✅ Sync: {len(synced)} أمر عالمي")
+        except discord.errors.HTTPException as e:
+            if e.status == 429:
+                print(f"⚠️ Rate limit — الأوامر ستظهر خلال دقيقة")
+            else:
+                print(f"⚠️ Sync error: {e}")
+        except Exception as e:
+            print(f"⚠️ Sync: {e}")
 
 @bot.event
 async def on_guild_join(guild):
@@ -3110,19 +3113,32 @@ async def _bot_main():
     except Exception as e:
         print(f"⚠️ DB: {e}")
 
-    try:
-        print("⏳ جاري الاتصال بـ Discord...")
-        async with bot:
-            await bot.start(TOKEN)
-    except discord.errors.LoginFailure:
-        _last_error = "TOKEN خاطئ أو منتهي — جيب token جديد من Discord Developer Portal"
-        print(f"❌ {_last_error}")
-    except discord.errors.PrivilegedIntentsRequired:
-        _last_error = "فعّل Server Members + Message Content في Discord Developer Portal → Bot → Privileged Gateway Intents"
-        print(f"❌ {_last_error}")
-    except Exception as e:
-        _last_error = str(e)
-        print(f"❌ {e}")
+    retry_delay = 5
+    for attempt in range(1, 6):
+        try:
+            print(f"⏳ محاولة الاتصال {attempt}/5...")
+            async with bot:
+                await bot.start(TOKEN)
+            break
+        except discord.errors.LoginFailure:
+            _last_error = "TOKEN خاطئ أو منتهي — جيب token جديد من Discord Developer Portal"
+            print(f"❌ {_last_error}"); break
+        except discord.errors.PrivilegedIntentsRequired:
+            _last_error = "فعّل Server Members + Message Content في Discord Developer Portal → Bot → Privileged Gateway Intents"
+            print(f"❌ {_last_error}"); break
+        except discord.errors.HTTPException as e:
+            if e.status == 429:
+                wait = retry_delay * attempt
+                _last_error = f"Rate limit — ينتظر {wait}ث"
+                print(f"⚠️ Rate limit — ينتظر {wait}ث...")
+                await asyncio.sleep(wait)
+            else:
+                _last_error = str(e); print(f"❌ {e}"); break
+        except Exception as e:
+            _last_error = str(e)
+            wait = retry_delay * attempt
+            print(f"⚠️ خطأ ({e}) — إعادة المحاولة بعد {wait}ث")
+            await asyncio.sleep(wait)
 
 def _start_bot_thread():
     loop = asyncio.new_event_loop()
