@@ -616,30 +616,30 @@ class TicketManageView(discord.ui.View):
         await interaction.response.send_message(embed=e, view=TicketOptionsView(), ephemeral=True)
 
 @bot.tree.command(name="ticket-setup", description="إعداد التذاكر")
-  @app_commands.describe(channel="القناة", title="العنوان", description="وصف البانل (مثال: بيع فلوس، دعم فني...)", image_url="رابط صورة البانل", role1="رتبة 1", role2="رتبة 2", role3="رتبة 3", role4="رتبة 4", role5="رتبة 5")
-  @app_commands.checks.has_permissions(administrator=True)
-  async def ticket_setup(interaction: discord.Interaction, channel: discord.TextChannel,
-                         title: str = "تذكرة دعم",
-                         description: str = "اضغط على الزر أدناه لفتح تذكرة.",
-                         image_url: str = "",
-                         role1: Optional[discord.Role]=None, role2: Optional[discord.Role]=None,
-                         role3: Optional[discord.Role]=None, role4: Optional[discord.Role]=None,
-                         role5: Optional[discord.Role]=None):
-      roles = [r for r in [role1,role2,role3,role4,role5] if r]
-      role_ids = json.dumps([str(r.id) for r in roles])
-      db_upsert("ticket_settings", str(interaction.guild.id),
-                mention_role_ids=role_ids, title=title, mention_admin=1,
-                description=description, image_url=image_url)
-      e = discord.Embed(title=f"🎫 {title}", description=description, color=0x5865F2)
-      if image_url:
-          e.set_image(url=image_url)
-      if roles:
-          e.add_field(name="🛡️ الإدارة المسؤولة", value=" | ".join(r.mention for r in roles))
-      await channel.send(embed=e, view=TicketView())
-      await interaction.response.send_message(f"✅ تذاكر جاهزة في {channel.mention}", ephemeral=True)
+@app_commands.describe(channel="القناة", title="العنوان", description="وصف البانل (مثال: بيع فلوس، دعم فني...)", image_url="رابط صورة البانل", role1="رتبة 1", role2="رتبة 2", role3="رتبة 3", role4="رتبة 4", role5="رتبة 5")
+@app_commands.checks.has_permissions(administrator=True)
+async def ticket_setup(interaction: discord.Interaction, channel: discord.TextChannel,
+                       title: str = "تذكرة دعم",
+                       description: str = "اضغط على الزر أدناه لفتح تذكرة.",
+                       image_url: str = "",
+                       role1: Optional[discord.Role]=None, role2: Optional[discord.Role]=None,
+                       role3: Optional[discord.Role]=None, role4: Optional[discord.Role]=None,
+                       role5: Optional[discord.Role]=None):
+    roles = [r for r in [role1,role2,role3,role4,role5] if r]
+    role_ids = json.dumps([str(r.id) for r in roles])
+    db_upsert("ticket_settings", str(interaction.guild.id),
+              mention_role_ids=role_ids, title=title, mention_admin=1,
+              description=description, image_url=image_url)
+    e = discord.Embed(title=f"🎫 {title}", description=description, color=0x5865F2)
+    if image_url:
+        e.set_image(url=image_url)
+    if roles:
+        e.add_field(name="🛡️ الإدارة المسؤولة", value=" | ".join(r.mention for r in roles))
+    await channel.send(embed=e, view=TicketView())
+    await interaction.response.send_message(f"✅ تذاكر جاهزة في {channel.mention}", ephemeral=True)
 
 
-  @bot.tree.command(name="ticket-category", description="كاتيغوري التذاكر")
+@bot.tree.command(name="ticket-category", description="كاتيغوري التذاكر")
 @app_commands.describe(category="الكاتيغوري")
 @app_commands.checks.has_permissions(administrator=True)
 async def ticket_category(interaction: discord.Interaction, category: discord.CategoryChannel):
