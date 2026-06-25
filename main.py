@@ -3093,7 +3093,8 @@ async def slash_prot_status(interaction: discord.Interaction):
 #  تشغيل البوت
 # ═══════════════════════════════════════════════════════════════
 
-async def _bot_main():
+def _start_bot_thread():
+    import time as _time
     global _last_error, _bot_started
     _bot_started = True
 
@@ -3111,42 +3112,28 @@ async def _bot_main():
     except Exception as e:
         print(f"⚠️ DB: {e}")
 
-    print("⏳ جاري الاتصال بـ Discord...")
-    try:
-        async with bot:
-            await bot.start(TOKEN)
-    except discord.errors.LoginFailure:
-        _last_error = "TOKEN_INVALID"
-        print("❌ TOKEN خاطئ أو منتهي")
-    except discord.errors.PrivilegedIntentsRequired:
-        _last_error = "INTENTS_DISABLED"
-        print("❌ فعّل Privileged Intents في Developer Portal")
-    except Exception as e:
-        _last_error = str(e)
-        print(f"❌ {e}")
-        raise  # يرفع الخطأ عشان الـ thread يعيد التشغيل
-
-def _start_bot_thread():
-    import time as _time
     attempt = 0
     while True:
         attempt += 1
-        print(f"🔄 بدء المحاولة #{attempt}")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        print(f"⏳ محاولة الاتصال #{attempt} بـ Discord...")
         try:
-            loop.run_until_complete(_bot_main())
+            # bot.run() هو الطريقة الصحيحة — يدير الـ event loop نفسه
+            bot.run(TOKEN, log_handler=None, reconnect=True)
+            # لو وصلنا هنا = البوت أغلق بشكل طبيعي
+            print("✅ البوت أغلق بشكل طبيعي"); break
+        except discord.errors.LoginFailure:
+            _last_error = "TOKEN_INVALID"
+            print("❌ TOKEN خاطئ أو منتهي — جيب token جديد"); break
+        except discord.errors.PrivilegedIntentsRequired:
+            _last_error = "INTENTS_DISABLED"
+            print("❌ فعّل Privileged Intents في Developer Portal"); break
+        except KeyboardInterrupt:
+            break
         except Exception as e:
-            print(f"⚠️ crash: {e}")
-        finally:
-            try: loop.close()
-            except: pass
-        # لا تعيد التشغيل على أخطاء دائمة
-        if _last_error in ("TOKEN_MISSING", "TOKEN_INVALID", "INTENTS_DISABLED"):
-            print(f"❌ خطأ دائم ({_last_error}) — إيقاف"); break
-        # انتظر قبل الإعادة (30 ثانية)
-        wait = 30
-        print(f"⏳ إعادة تشغيل بعد {wait}ث...")
+            _last_error = str(e)
+            print(f"❌ خطأ: {e}")
+        wait = min(60 * attempt, 300)  # 1 دقيقة، 2، 3... حتى 5 دقائق كحد أقصى
+        print(f"⏳ إعادة المحاولة بعد {wait}ث...")
         _time.sleep(wait)
 
 threading.Thread(target=_start_bot_thread, daemon=True).start()
