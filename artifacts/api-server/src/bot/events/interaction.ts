@@ -3,13 +3,23 @@ import type { Command } from "../commands/types";
 import { handleBloxpinButton } from "../commands/bloxpin";
 import { handleTicketButton } from "../commands/ticket";
 import { handleGiveawayButton } from "../commands/utility";
-import { handleDecorationButton } from "../commands/decoration";
+import { handleDecorationButton, handleStyleAutocomplete } from "../commands/decoration";
 import { logger } from "../../lib/logger";
 
 export async function onInteractionCreate(
   interaction: Interaction,
   commands: Collection<string, Command>,
 ): Promise<void> {
+  // ── Autocomplete ────────────────────────────────────────────────────────
+  if (interaction.isAutocomplete()) {
+    const { commandName, options } = interaction;
+    if (commandName === "decorate" && options.getFocused(true).name === "style") {
+      handleStyleAutocomplete(interaction);
+    }
+    return;
+  }
+
+  // ── Buttons ─────────────────────────────────────────────────────────────
   if (interaction.isButton()) {
     const { customId } = interaction;
     try {
@@ -33,6 +43,7 @@ export async function onInteractionCreate(
     return;
   }
 
+  // ── Slash commands ───────────────────────────────────────────────────────
   if (!interaction.isChatInputCommand()) return;
 
   const command = commands.get(interaction.commandName);
