@@ -1,6 +1,5 @@
 import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, ChannelType } from "discord.js";
 import type { Command } from "./types";
-import { setlog } from "./info";
 
 const broadcast: Command = {
   data: new SlashCommandBuilder()
@@ -52,4 +51,4 @@ const unlock: Command = {
   },
 };
 
-export const adminCommands: Command[] = [broadcast, unlock, setlog];
+export const adminCommands: Command[] = [broadcast, unlock];
