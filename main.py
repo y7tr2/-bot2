@@ -1149,25 +1149,21 @@ async def slash_ch_delete(interaction: discord.Interaction, channel: discord.Tex
 # ══════════════════════════════════════════════════════════════
 
 class MakerView(discord.ui.View):
-    """View تفاعلية لبناء الإيمبند"""
-    def __init__(self, author_id: int, target_channel):
+    def __init__(self, author: discord.Member, target_channel):
         super().__init__(timeout=300)
-        self.author_id    = author_id
-        self.target       = target_channel
-        self.title_text   = "✨ عنوان البانل"
-        self.desc_text    = "اضغط الأزرار أدناه لتعديل البانل"
-        self.color_int    = 0x5865F2
-        self.footer_text  = ""
-        self.image_url    = ""
-        self.thumb_url    = ""
-        self.author_text  = ""
+        self.author_id   = author.id
+        self.author_obj  = author
+        self.target      = target_channel
+        self.title_text  = "✨ عنوان البانل"
+        self.desc_text   = "اضغط الأزرار أدناه لتعديل البانل"
+        self.color_int   = 0x5865F2
+        self.footer_text = ""
+        self.image_url   = ""
+        self.thumb_url   = ""
+        self.author_text = ""
 
     def build_embed(self) -> discord.Embed:
-        e = discord.Embed(
-            title       = self.title_text,
-            description = self.desc_text,
-            color       = self.color_int
-        )
+        e = discord.Embed(title=self.title_text, description=self.desc_text, color=self.color_int)
         if self.footer_text: e.set_footer(text=self.footer_text)
         if self.image_url:   e.set_image(url=self.image_url)
         if self.thumb_url:   e.set_thumbnail(url=self.thumb_url)
@@ -1181,91 +1177,114 @@ class MakerView(discord.ui.View):
             return False
         return True
 
-    # ── العنوان ──────────────────────────────────────────────
     @discord.ui.button(label="📝 العنوان", style=discord.ButtonStyle.primary, row=0)
     async def btn_title(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
+        v = self
         class _M(discord.ui.Modal, title="تعديل العنوان"):
-            val = discord.ui.TextInput(label="العنوان", max_length=256, default=self.view.title_text)
+            val = discord.ui.TextInput(label="العنوان", max_length=256, default=v.title_text)
             async def on_submit(s, i):
-                self.view.title_text = s.val.value
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
+                v.title_text = s.val.value
+                await i.response.edit_message(embed=v.build_embed(), view=v)
         await interaction.response.send_modal(_M())
 
-    # ── الوصف ────────────────────────────────────────────────
     @discord.ui.button(label="📄 الوصف", style=discord.ButtonStyle.primary, row=0)
     async def btn_desc(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
+        v = self
         class _M(discord.ui.Modal, title="تعديل الوصف"):
-            val = discord.ui.TextInput(label="الوصف", style=discord.TextStyle.paragraph,
-                                       max_length=4000, default=self.view.desc_text)
+            val = discord.ui.TextInput(label="الوصف", style=discord.TextStyle.paragraph, max_length=4000, default=v.desc_text)
             async def on_submit(s, i):
-                self.view.desc_text = s.val.value
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
+                v.desc_text = s.val.value
+                await i.response.edit_message(embed=v.build_embed(), view=v)
         await interaction.response.send_modal(_M())
 
-    # ── اللون ────────────────────────────────────────────────
     @discord.ui.button(label="🎨 اللون", style=discord.ButtonStyle.secondary, row=0)
     async def btn_color(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
-        class _M(discord.ui.Modal, title="اللون (Hex)"):
-            val = discord.ui.TextInput(label="كود اللون hex مثال: FF5733", max_length=7, default="5865F2")
+        v = self
+        class _M(discord.ui.Modal, title="اللون — كود Hex"):
+            val = discord.ui.TextInput(label="مثال: FF5733 أو #5865F2", max_length=7, default="5865F2")
             async def on_submit(s, i):
-                try: self.view.color_int = int(s.val.value.replace("#",""), 16)
-                except: self.view.color_int = 0x5865F2
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
+                try: v.color_int = int(s.val.value.replace("#",""), 16)
+                except: v.color_int = 0x5865F2
+                await i.response.edit_message(embed=v.build_embed(), view=v)
         await interaction.response.send_modal(_M())
 
-    # ── الفوتر ───────────────────────────────────────────────
     @discord.ui.button(label="🔖 الفوتر", style=discord.ButtonStyle.secondary, row=1)
     async def btn_footer(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
+        v = self
         class _M(discord.ui.Modal, title="الفوتر"):
-            val = discord.ui.TextInput(label="نص الفوتر", max_length=256, required=False,
-                                       default=self.view.footer_text)
+            val = discord.ui.TextInput(label="نص الفوتر", max_length=256, required=False, default=v.footer_text)
             async def on_submit(s, i):
-                self.view.footer_text = s.val.value
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
+                v.footer_text = s.val.value
+                await i.response.edit_message(embed=v.build_embed(), view=v)
         await interaction.response.send_modal(_M())
 
-    # ── الصورة الرئيسية ───────────────────────────────────────
     @discord.ui.button(label="🖼️ الصورة", style=discord.ButtonStyle.secondary, row=1)
     async def btn_image(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
-        class _M(discord.ui.Modal, title="رابط الصورة"):
-            val = discord.ui.TextInput(label="رابط الصورة الكبيرة", max_length=500,
-                                       required=False, default=self.view.image_url)
+        v = self
+        class _M(discord.ui.Modal, title="رابط الصورة الكبيرة"):
+            val = discord.ui.TextInput(label="رابط الصورة", max_length=500, required=False, default=v.image_url)
             async def on_submit(s, i):
-                self.view.image_url = s.val.value.strip()
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
+                v.image_url = s.val.value.strip()
+                await i.response.edit_message(embed=v.build_embed(), view=v)
         await interaction.response.send_modal(_M())
 
-    # ── الثمبنيل ──────────────────────────────────────────────
-    @discord.ui.button(label="🖼️ ثمبنيل", style=discord.ButtonStyle.secondary, row=1)
-    async def btn_thumb(self, interaction: discord.Interaction, btn: discord.ui.Button):
+    @discord.ui.button(label="👤 الأوثر", style=discord.ButtonStyle.secondary, row=1)
+    async def btn_author_txt(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
-        class _M(discord.ui.Modal, title="رابط الثمبنيل"):
-            val = discord.ui.TextInput(label="رابط الثمبنيل (يمين الإيمبند)", max_length=500,
-                                       required=False, default=self.view.thumb_url)
+        v = self
+        class _M(discord.ui.Modal, title="الأوثر"):
+            val = discord.ui.TextInput(label="نص الأوثر أعلى الإيمبند", max_length=256, required=False, default=v.author_text)
             async def on_submit(s, i):
-                self.view.thumb_url = s.val.value.strip()
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
+                v.author_text = s.val.value
+                await i.response.edit_message(embed=v.build_embed(), view=v)
         await interaction.response.send_modal(_M())
 
-    # ── الأوثر ───────────────────────────────────────────────
-    @discord.ui.button(label="👤 الأوثر", style=discord.ButtonStyle.secondary, row=2)
-    async def btn_author(self, interaction: discord.Interaction, btn: discord.ui.Button):
+    @discord.ui.select(
+        cls=discord.ui.Select,
+        placeholder="📷 اختر صورة سريعة...",
+        options=[
+            discord.SelectOption(label="صورتي أنا",       value="me",     emoji="🧑"),
+            discord.SelectOption(label="أيقونة السيرفر",  value="server",  emoji="🏠"),
+            discord.SelectOption(label="عضو معين",        value="member",  emoji="👥"),
+            discord.SelectOption(label="إزالة الصورة",   value="remove",  emoji="🗑️"),
+        ],
+        row=2
+    )
+    async def select_quick_img(self, interaction: discord.Interaction, select: discord.ui.Select):
         if not await self._check(interaction): return
-        class _M(discord.ui.Modal, title="نص الأوثر"):
-            val = discord.ui.TextInput(label="نص الأوثر (أعلى الإيمبند)", max_length=256,
-                                       required=False, default=self.view.author_text)
-            async def on_submit(s, i):
-                self.view.author_text = s.val.value
-                await i.response.edit_message(embed=self.view.build_embed(), view=self.view)
-        await interaction.response.send_modal(_M())
+        val = select.values[0]
+        if val == "me":
+            self.image_url = str(self.author_obj.display_avatar.url)
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        elif val == "server":
+            icon = interaction.guild.icon.url if interaction.guild and interaction.guild.icon else ""
+            if not icon:
+                await interaction.response.send_message("❌ السيرفر ما عنده أيقونة", ephemeral=True); return
+            self.image_url = str(icon)
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        elif val == "remove":
+            self.image_url = ""
+            await interaction.response.edit_message(embed=self.build_embed(), view=self)
+        elif val == "member":
+            v = self
+            class _M(discord.ui.Modal, title="صورة عضو"):
+                uid_inp = discord.ui.TextInput(label="ضع ID العضو أو منشنه (بدون @)", max_length=30)
+                async def on_submit(s, i):
+                    raw = s.uid_inp.value.strip().replace("<@","").replace(">","").replace("!","")
+                    try:
+                        mem = i.guild.get_member(int(raw)) or await i.guild.fetch_member(int(raw))
+                        v.image_url = str(mem.display_avatar.url)
+                        await i.response.edit_message(embed=v.build_embed(), view=v)
+                    except:
+                        await i.response.send_message("❌ ما لقيت العضو", ephemeral=True)
+            await interaction.response.send_modal(_M())
 
-    # ── إرسال ────────────────────────────────────────────────
-    @discord.ui.button(label="✅ إرسال", style=discord.ButtonStyle.success, row=2)
+    @discord.ui.button(label="✅ إرسال", style=discord.ButtonStyle.success, row=3)
     async def btn_send(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
         try:
@@ -1274,38 +1293,33 @@ class MakerView(discord.ui.View):
             for item in self.children: item.disabled = True
             await interaction.response.edit_message(
                 content=f"✅ تم إرسال البانل إلى {self.target.mention}",
-                embed=self.build_embed(), view=self
-            )
+                embed=self.build_embed(), view=self)
         except discord.Forbidden:
-            await interaction.response.send_message("❌ ما أقدر أرسل في تلك القناة", ephemeral=True)
+            await interaction.response.send_message("❌ ما أقدر أرسل في هذه القناة", ephemeral=True)
         except Exception as ex:
             await interaction.response.send_message(f"❌ خطأ: {ex}", ephemeral=True)
 
-    # ── إلغاء ────────────────────────────────────────────────
-    @discord.ui.button(label="🗑️ إلغاء", style=discord.ButtonStyle.danger, row=2)
+    @discord.ui.button(label="🗑️ إلغاء", style=discord.ButtonStyle.danger, row=3)
     async def btn_cancel(self, interaction: discord.Interaction, btn: discord.ui.Button):
         if not await self._check(interaction): return
         self.stop()
         await interaction.response.edit_message(content="❌ تم إلغاء الميكر", embed=None, view=None)
 
     async def on_timeout(self):
-        try:
-            for item in self.children: item.disabled = True
-        except: pass
+        for item in self.children: item.disabled = True
 
 
 @bot.tree.command(name="maker", description="صانع بانلات إيمبند تفاعلي")
-@app_commands.describe(channel="القناة التي تريد إرسال البانل فيها (اختياري)")
+@app_commands.describe(channel="القناة المستهدفة (اختياري)")
 @app_commands.checks.has_permissions(administrator=True)
 async def slash_maker(interaction: discord.Interaction, channel: Optional[discord.TextChannel]=None):
     target = channel or interaction.channel
-    view   = MakerView(author_id=interaction.user.id, target_channel=target)
+    view   = MakerView(author=interaction.user, target_channel=target)
     em     = view.build_embed()
-    em.set_footer(text=f"الميكر | القناة المستهدفة: #{target.name} | اضغط الأزرار للتعديل")
+    em.set_footer(text=f"القناة المستهدفة: #{target.name}  |  اضغط الأزرار للتعديل")
     await interaction.response.send_message(
-        content="🎨 **بانل الميكر** — عدّل الإيمبند ثم اضغط إرسال",
-        embed=em, view=view, ephemeral=True
-    )
+        content="🎨 **ميكر البانلات** — عدّل الإيمبند ثم اضغط إرسال",
+        embed=em, view=view, ephemeral=True)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -1333,15 +1347,10 @@ async def slash_bot_maker(interaction: discord.Interaction):
     em     = discord.Embed(
         title       = "🤖 ميكر — متجر البوتات",
         description = f"رصيدك: **{points} نقطة** 🪙\n\nاستخدم `/bot-maker-buy` لشراء بوت\n\u200b",
-        color       = 0x5865F2
-    )
+        color       = 0x5865F2)
     for k, v in BOT_MAKER_TYPES.items():
         can = "✅" if points >= v["points"] else "❌"
-        em.add_field(
-            name   = f"{can} {v['name']}",
-            value  = f"{v['desc']}\n💰 **{v['points']} نقطة**",
-            inline = True
-        )
+        em.add_field(name=f"{can} {v['name']}", value=f"{v['desc']}\n💰 **{v['points']} نقطة**", inline=True)
     em.set_footer(text="سيتم توصيل البوت من المالك خلال 24 ساعة")
     await interaction.response.send_message(embed=em, ephemeral=True)
 
@@ -1349,16 +1358,16 @@ async def slash_bot_maker(interaction: discord.Interaction):
 @bot.tree.command(name="bot-maker-buy", description="اشتر بوتاً جاهزاً بنقاطك")
 @app_commands.describe(bot_type="نوع البوت")
 @app_commands.choices(bot_type=[
-    app_commands.Choice(name="🎫 بوت تذاكر — 100 نقطة",     value="ticket"),
-    app_commands.Choice(name="🛡️ بوت موديريشن — 150 نقطة", value="moderation"),
-    app_commands.Choice(name="👋 بوت ترحيب — 80 نقطة",      value="welcome"),
-    app_commands.Choice(name="🎉 بوت سحب — 120 نقطة",       value="giveaway"),
-    app_commands.Choice(name="🏪 بوت ستور — 200 نقطة",      value="store"),
-    app_commands.Choice(name="🎵 بوت موسيقى — 150 نقطة",    value="music"),
-    app_commands.Choice(name="📋 بوت لوق — 100 نقطة",       value="log"),
-    app_commands.Choice(name="⭐ بوت مستويات — 120 نقطة",   value="leveling"),
-    app_commands.Choice(name="💰 بوت اقتصاد — 180 نقطة",   value="economy"),
-    app_commands.Choice(name="⚙️ بوت مخصص — 300 نقطة",    value="custom"),
+    app_commands.Choice(name="🎫 بوت تذاكر — 100 نقطة",      value="ticket"),
+    app_commands.Choice(name="🛡️ بوت موديريشن — 150 نقطة",  value="moderation"),
+    app_commands.Choice(name="👋 بوت ترحيب — 80 نقطة",       value="welcome"),
+    app_commands.Choice(name="🎉 بوت سحب — 120 نقطة",        value="giveaway"),
+    app_commands.Choice(name="🏪 بوت ستور — 200 نقطة",       value="store"),
+    app_commands.Choice(name="🎵 بوت موسيقى — 150 نقطة",     value="music"),
+    app_commands.Choice(name="📋 بوت لوق — 100 نقطة",        value="log"),
+    app_commands.Choice(name="⭐ بوت مستويات — 120 نقطة",    value="leveling"),
+    app_commands.Choice(name="💰 بوت اقتصاد — 180 نقطة",    value="economy"),
+    app_commands.Choice(name="⚙️ بوت مخصص — 300 نقطة",     value="custom"),
 ])
 async def slash_bot_maker_buy(interaction: discord.Interaction, bot_type: str):
     uid  = str(interaction.user.id)
@@ -1379,14 +1388,13 @@ async def slash_bot_maker_buy(interaction: discord.Interaction, bot_type: str):
         "INSERT INTO maker_orders (user_id,user_name,bot_type_key,bot_type_name,server_id,server_name,points_paid,status) "
         "VALUES (?,?,?,?,?,?,?,'pending')",
         (uid, str(interaction.user), bot_type, info["name"],
-         gid, getattr(interaction.guild,"name","DM"), cost)
-    )
+         gid, getattr(interaction.guild,"name","DM"), cost))
     remaining = store_get_points(uid)
     em = discord.Embed(title="✅ تم الطلب بنجاح!", color=0x57F287)
-    em.add_field(name="البوت",       value=info["name"],       inline=True)
-    em.add_field(name="التكلفة",     value=f"{cost} 🪙",       inline=True)
-    em.add_field(name="الرصيد المتبقي", value=f"{remaining} 🪙", inline=True)
-    em.add_field(name="الوصف",       value=info["desc"],        inline=False)
+    em.add_field(name="البوت",          value=info["name"],       inline=True)
+    em.add_field(name="التكلفة",        value=f"{cost} 🪙",       inline=True)
+    em.add_field(name="الرصيد المتبقي", value=f"{remaining} 🪙",  inline=True)
+    em.add_field(name="الوصف",          value=info["desc"],        inline=False)
     em.set_footer(text="سيتواصل معك المالك خلال 24 ساعة لتسليم البوت")
     em.timestamp = discord.utils.utcnow()
     await interaction.response.send_message(embed=em, ephemeral=True)
@@ -1398,19 +1406,14 @@ async def slash_bot_maker_status(interaction: discord.Interaction):
     rows = db_q(
         "SELECT id,bot_type_name,points_paid,status,created_at FROM maker_orders "
         "WHERE user_id=? ORDER BY id DESC LIMIT 5",
-        (uid,), fetch="all"
-    ) or []
+        (uid,), fetch="all") or []
     em = discord.Embed(title="📦 طلباتك في الميكر", color=0x5865F2)
     if not rows:
         em.description = "لا توجد طلبات بعد\nاستخدم `/bot-maker-buy` لطلب بوت"
     else:
         for oid, bname, pts, st, cat in rows:
             icon = "✅" if st == "done" else "⏳"
-            em.add_field(
-                name  = f"{icon} #{oid} — {bname}",
-                value = f"💰 {pts} نقطة | 📅 {str(cat)[:10]}",
-                inline= False
-            )
+            em.add_field(name=f"{icon} #{oid} — {bname}", value=f"💰 {pts} نقطة | 📅 {str(cat)[:10]}", inline=False)
     await interaction.response.send_message(embed=em, ephemeral=True)
 
 
