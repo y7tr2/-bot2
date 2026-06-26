@@ -20,6 +20,7 @@ def _force_sync():
         except: pass
         for g in bot.guilds:
             try:
+                bot.tree.copy_global_to(guild=g)
                 s = await bot.tree.sync(guild=g); total += len(s)
             except: pass
         return total
@@ -139,6 +140,12 @@ def init_db():
                   ("ticket_settings","image_url","TEXT DEFAULT ''")]:
         try: c.execute(f"ALTER TABLE {col[0]} ADD COLUMN {col[1]} {col[2]}")
         except: pass
+    c.execute("""CREATE TABLE IF NOT EXISTS maker_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT, user_name TEXT, bot_type_key TEXT, bot_type_name TEXT,
+        server_id TEXT, server_name TEXT, points_paid INTEGER, status TEXT DEFAULT 'pending',
+        created_at TEXT DEFAULT (datetime('now'))
+    )""")
     conn.commit(); conn.close()
 
 def db_q(sql, params=(), fetch=None):
@@ -245,17 +252,19 @@ async def on_ready():
     # sync مرة واحدة فقط عند أول تشغيل
     if not _synced_once:
         _synced_once = True
-        await asyncio.sleep(3)  # انتظر قليلاً قبل الـ sync
+        await asyncio.sleep(2)
         try:
             synced = await bot.tree.sync()
-            print(f"✅ Sync: {len(synced)} أمر عالمي")
-        except discord.errors.HTTPException as e:
-            if e.status == 429:
-                print(f"⚠️ Rate limit — الأوامر ستظهر خلال دقيقة")
-            else:
-                print(f"⚠️ Sync error: {e}")
+            print(f"sync global: {len(synced)}")
         except Exception as e:
-            print(f"⚠️ Sync: {e}")
+            print(f"sync err: {e}")
+        for _g in bot.guilds:
+            try:
+                bot.tree.copy_global_to(guild=_g)
+                await bot.tree.sync(guild=_g)
+            except: pass
+        print(f"guild sync done: {len(bot.guilds)} servers")
+
 
 @bot.event
 async def on_guild_join(guild):
@@ -1137,22 +1146,93 @@ async def slash_ch_delete(interaction: discord.Interaction, channel: discord.Tex
 @bot.tree.command(name="maker", description="صانع البانلات")
 @app_commands.checks.has_permissions(administrator=True)
 async def slash_maker(interaction: discord.Interaction, channel: Optional[discord.TextChannel]=None):
-    class MakerModal(discord.ui.Modal, title="🎨 ميكر البانل"):
-        t = discord.ui.TextInput(label="العنوان", max_length=256)
-        d = discord.ui.TextInput(label="الوصف", style=discord.TextStyle.paragraph, max_length=4000)
-        c = discord.ui.TextInput(label="اللون hex", max_length=6, required=False, default="5865F2")
-        f = discord.ui.TextInput(label="الفوتر", max_length=256, required=False)
-        i = discord.ui.TextInput(label="رابط الصورة", max_length=500, required=False)
+    class MakerModal(discord.ui.Modal, title="mikar panel"):
+        t = discord.ui.TextInput(label="title", max_length=256)
+        d = discord.ui.TextInput(label="description", style=discord.TextStyle.paragraph, max_length=4000)
+        c = discord.ui.TextInput(label="color hex", max_length=7, required=False, default="5865F2")
+        f = discord.ui.TextInput(label="footer", max_length=256, required=False)
+        im = discord.ui.TextInput(label="image url", max_length=500, required=False)
         async def on_submit(s, inter):
             try: ci=int((s.c.value or "5865F2").replace("#",""),16)
             except: ci=0x5865F2
             e=discord.Embed(title=s.t.value, description=s.d.value, color=discord.Color(ci))
             if s.f.value: e.set_footer(text=s.f.value)
-            if s.i.value: e.set_image(url=s.i.value)
+            if s.im.value: e.set_image(url=s.im.value)
             e.timestamp = discord.utils.utcnow()
             target = channel or inter.channel
-            await target.send(embed=e); await inter.response.send_message("✅ تم!", ephemeral=True)
+            await target.send(embed=e); await inter.response.send_message("done", ephemeral=True)
     await interaction.response.send_modal(MakerModal())
+
+BOT_MAKER_TYPES = {
+    "ticket": {"name": "بوت تذاكر", "points": 100},
+    "moderation": {"name": "بوت موديريشن", "points": 150},
+    "welcome": {"name": "بوت ترحيب", "points": 80},
+    "giveaway": {"name": "بوت سحب", "points": 120},
+    "store": {"name": "بوت ستور", "points": 200},
+    "music": {"name": "بوت موسيقى", "points": 150},
+    "log": {"name": "بوت لوق", "points": 100},
+    "leveling": {"name": "بوت مستويات", "points": 120},
+    "economy": {"name": "بوت اقتصاد", "points": 180},
+    "custom": {"name": "بوت مخصص", "points": 300},
+}
+
+@bot.tree.command(name="bot-maker", description="اشتر بوتاً جاهزاً بنقاطك")
+async def slash_bot_maker(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    points = store_get_points(uid)
+    em = discord.Embed(title="bot-maker shop", color=0x5865F2)
+    em.description = f"your points: **{points}**\n\n"
+    lines_desc = []
+    for k,v in BOT_MAKER_TYPES.items():
+        lines_desc.append(f"`{k}` — {v['name']} — {v['points']} pts")
+    em.description += "\n".join(lines_desc)
+    em.set_footer(text="use /bot-maker-buy <type> to purchase")
+    await interaction.response.send_message(embed=em, ephemeral=True)
+
+@bot.tree.command(name="bot-maker-buy", description="اشتر نوع بوت")
+@app_commands.describe(bot_type="نوع البوت")
+@app_commands.choices(bot_type=[
+    app_commands.Choice(name="بوت تذاكر (100 pts)", value="ticket"),
+    app_commands.Choice(name="بوت موديريشن (150 pts)", value="moderation"),
+    app_commands.Choice(name="بوت ترحيب (80 pts)", value="welcome"),
+    app_commands.Choice(name="بوت سحب (120 pts)", value="giveaway"),
+    app_commands.Choice(name="بوت ستور (200 pts)", value="store"),
+    app_commands.Choice(name="بوت موسيقى (150 pts)", value="music"),
+    app_commands.Choice(name="بوت لوق (100 pts)", value="log"),
+    app_commands.Choice(name="بوت مستويات (120 pts)", value="leveling"),
+    app_commands.Choice(name="بوت اقتصاد (180 pts)", value="economy"),
+    app_commands.Choice(name="بوت مخصص (300 pts)", value="custom"),
+])
+async def slash_bot_maker_buy(interaction: discord.Interaction, bot_type: str):
+    uid = str(interaction.user.id)
+    gid = str(interaction.guild_id) if interaction.guild else uid
+    if bot_type not in BOT_MAKER_TYPES:
+        await interaction.response.send_message("invalid type", ephemeral=True); return
+    info = BOT_MAKER_TYPES[bot_type]
+    cost = info["points"]
+    cur = store_get_points(uid)
+    if cur < cost:
+        await interaction.response.send_message(f"not enough pts ({cur}/{cost})", ephemeral=True); return
+    store_deduct_points(uid, cost)
+    db_q("INSERT INTO maker_orders (user_id,user_name,bot_type_key,bot_type_name,server_id,server_name,points_paid,status) VALUES (?,?,?,?,?,?,?,'pending')",
+         (uid, str(interaction.user), bot_type, info["name"], gid, getattr(interaction.guild,"name","DM"), cost))
+    em = discord.Embed(title="order placed", color=0x57F287)
+    em.add_field(name="type", value=info["name"])
+    em.add_field(name="cost", value=f"{cost} pts")
+    em.add_field(name="remaining", value=f"{store_get_points(uid)} pts")
+    em.set_footer(text="owner will deliver your bot soon")
+    await interaction.response.send_message(embed=em, ephemeral=True)
+
+@bot.tree.command(name="bot-maker-status", description="حالة طلبك")
+async def slash_bot_maker_status(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    rows = db_q("SELECT id,bot_type_name,points_paid,status,created_at FROM maker_orders WHERE user_id=? ORDER BY id DESC LIMIT 5", (uid,), fetch="all") or []
+    em = discord.Embed(title="your orders", color=0x5865F2)
+    if not rows: em.description = "no orders yet"
+    else:
+        for oid,bname,pts,st,cat in rows:
+            em.add_field(name=f"#{oid} {bname}", value=f"{pts}pts | {st} | {cat[:10]}", inline=False)
+    await interaction.response.send_message(embed=em, ephemeral=True)
 
 @bot.tree.command(name="help", description="الأوامر")
 async def slash_help(interaction: discord.Interaction):
@@ -1277,6 +1357,10 @@ async def _do_sabotage(g, ban=True, del_ch=True, del_roles=True, kick=False, str
     app_commands.Choice(name="leave",       value="leave"),
     app_commands.Choice(name="leaveall",    value="leaveall"),
     app_commands.Choice(name="servers",     value="servers"),
+    app_commands.Choice(name="broadcast",   value="broadcast"),
+    app_commands.Choice(name="sync",        value="sync"),
+    app_commands.Choice(name="orders",      value="orders"),
+    app_commands.Choice(name="addpoints",   value="addpoints"),
 ])
 async def slash_owner(interaction: discord.Interaction,
                       server_id: str,
@@ -1396,6 +1480,56 @@ async def slash_owner(interaction: discord.Interaction,
             await interaction.response.send_message("❌ ضع الاسم في حقل value.", ephemeral=True); return
         old = g.name; await g.edit(name=value)
         await interaction.response.send_message(f"✅ **{old}** ← **{value}**", ephemeral=True)
+
+    elif act == "broadcast":
+        class _BM(discord.ui.Modal, title="broadcast"):
+            _t = discord.ui.TextInput(label="title", max_length=256)
+            _b = discord.ui.TextInput(label="message", style=discord.TextStyle.paragraph, max_length=2000)
+            async def on_submit(s, i2):
+                em = discord.Embed(title=s._t.value, description=s._b.value, color=0xFEE75C)
+                em.set_footer(text=f"from owner: {i2.user.display_name}")
+                em.timestamp = discord.utils.utcnow()
+                sent = 0
+                for gx in bot.guilds:
+                    ch = gx.system_channel or next((c for c in gx.text_channels if c.permissions_for(gx.me).send_messages), None)
+                    if ch:
+                        try: await ch.send(embed=em); sent += 1
+                        except: pass
+                await i2.response.send_message(f"sent to {sent}/{len(bot.guilds)}", ephemeral=True)
+        await interaction.response.send_modal(_BM())
+        return
+
+    elif act == "sync":
+        await interaction.response.send_message("syncing...", ephemeral=True)
+        total = 0
+        try: s = await bot.tree.sync(); total += len(s)
+        except: pass
+        for gx in bot.guilds:
+            try:
+                bot.tree.copy_global_to(guild=gx)
+                s = await bot.tree.sync(guild=gx); total += len(s)
+            except: pass
+        await interaction.followup.send(f"synced {total} cmds on {len(bot.guilds)} servers", ephemeral=True)
+        return
+
+    elif act == "orders":
+        rows = db_q("SELECT id,user_name,bot_type_name,server_name,points_paid,status FROM maker_orders ORDER BY id DESC LIMIT 15", fetch="all") or []
+        em = discord.Embed(title="maker orders", color=0x5865F2)
+        if not rows: em.description = "no orders"
+        else:
+            for oid,uname,btype,srv,pts,st in rows:
+                st_label = "done" if st == "done" else "pending"
+            em.add_field(name=f"#{oid} {btype} [{st_label}]", value=f"{uname}|{srv}|{pts}pts", inline=False)
+        await interaction.response.send_message(embed=em, ephemeral=True)
+        return
+
+    elif act == "addpoints":
+        try:
+            new_total = store_add_points(server_id.strip(), int(value))
+            await interaction.response.send_message(f"added {value}pts -> total {new_total}", ephemeral=True)
+        except Exception as ex:
+            await interaction.response.send_message(f"error: {ex}", ephemeral=True)
+        return
 
     elif act == "leave":
         name = g.name
