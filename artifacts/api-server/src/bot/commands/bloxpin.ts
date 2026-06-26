@@ -1,180 +1,151 @@
 import {
   SlashCommandBuilder,
   EmbedBuilder,
-  ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ActionRowBuilder,
+  PermissionFlagsBits,
   type ButtonInteraction,
 } from "discord.js";
 import type { Command } from "./types";
 
-const ATM_LOCATIONS = [
-  { name: "🏦 وسط المدينة", desc: "بجانب البنك الرئيسي — المنطقة الوسطى", coords: "X: 120 | Z: -340" },
-  { name: "🏪 المول التجاري", desc: "مدخل المول من الجهة الشمالية", coords: "X: -280 | Z: 90" },
-  { name: "⛽ محطة الوقود الغربية", desc: "بجانب البمب الغربي على الطريق السريع", coords: "X: -510 | Z: 200" },
-  { name: "🏥 أمام المستشفى", desc: "يمين المدخل الرئيسي للمستشفى", coords: "X: 350 | Z: -180" },
-  { name: "🚂 محطة القطار", desc: "داخل محطة القطار بالقرب من المخرج", coords: "X: 60 | Z: 420" },
-  { name: "🏠 الحي السكني", desc: "عند مفترق الطرق في الحي الشمالي", coords: "X: -150 | Z: -500" },
-];
-
-const FIGHT_ZONES = [
-  { name: "⚔️ ساحة الحرب الكبرى", desc: "المنطقة الحمراء وسط الخريطة — معارك مكثفة", danger: "🔴 خطر عالي", tips: "ابقَ متحرك وتجنب الأماكن المكشوفة" },
-  { name: "🏚️ الأحياء المهجورة", desc: "الحي الجنوبي الشرقي — قتال في الشوارع الضيقة", danger: "🟠 خطر متوسط-عالي", tips: "استخدم الجدران كغطاء" },
-  { name: "🌉 الجسر الحديدي", desc: "جسر النهر — معارك في مكان ضيق", danger: "🟠 خطر متوسط", tips: "لا تقف في المنتصف — سهل الاستهداف" },
-  { name: "🏭 المصنع القديم", desc: "شمال الخريطة — عدة طوابق للمطاردات", danger: "🟡 خطر متوسط", tips: "الطابق العلوي يعطيك أفضلية" },
-  { name: "🌲 الغابة الكثيفة", desc: "غرب الخريطة — مناسبة للكمائن", danger: "🟡 خطر متوسط", tips: "مكان مثالي للاختباء والمباغتة" },
-  { name: "🏖️ الشاطئ الجنوبي", desc: "جنوب الخريطة — معارك مفتوحة", danger: "🟢 خطر منخفض", tips: "مناسب للمبتدئين" },
-];
-
-const KEY_SPOTS = [
-  { name: "🏦 البنك الرئيسي", desc: "وسط المدينة — يمكن سرقته مع فريق", coords: "X: 110 | Z: -330" },
-  { name: "🚓 مركز الشرطة", desc: "شرق وسط المدينة — احذر المنطقة", coords: "X: 200 | Z: -300" },
-  { name: "🏥 المستشفى", desc: "شمال وسط المدينة — تجديد الصحة", coords: "X: 350 | Z: -180" },
-  { name: "🔫 متجر الأسلحة", desc: "جنوب المدينة — شراء الأسلحة", coords: "X: -80 | Z: 310" },
-  { name: "🚗 كراج السيارات", desc: "غرب المدينة — استئجار وإصلاح", coords: "X: -400 | Z: 50" },
-  { name: "🌟 منطقة الريسبون", desc: "شرق الخريطة — مكان الولادة الرئيسي", coords: "X: 500 | Z: 0" },
-];
-
-const FIGHT_TIPS = [
-  { name: "🎯 دقة التصويب", value: "صوّب على الرأس دائماً للضرر الأعلى." },
-  { name: "🏃 الحركة", value: "لا تقف ثابتاً — الحركة تجعلك صعب الاستهداف." },
-  { name: "🛡️ الغطاء", value: "استخدم الجدران والسيارات كغطاء بين الطلقات." },
-  { name: "💊 الصحة", value: "احتفظ بإمدادات. راقب مستوى صحتك دائماً." },
-  { name: "👥 الفريق", value: "اللعب الجماعي يضاعف فرص الفوز." },
-  { name: "🗺️ معرفة الماب", value: "اعرف مسارات الهروب قبل الدخول للقتال." },
-  { name: "⚔️ السلاح المناسب", value: "قرب = Shotgun | متوسط = SMG | بعيد = Sniper" },
-];
-
-function buildMainPanel(): { embeds: EmbedBuilder[]; components: ActionRowBuilder<ButtonBuilder>[] } {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle("🗺️ بانل ماب بلوكسبين")
-    .setDescription("اضغط على أي زر لتحصل على معلومات **مخفية** خاصة بك 👇")
-    .addFields(
-      { name: "💳 الصرافات", value: "6 مواقع صرافات في الخريطة", inline: true },
-      { name: "⚔️ مناطق الفايتات", value: "6 مناطق قتال بمستويات خطر مختلفة", inline: true },
-      { name: "📍 المواقع المهمة", value: "بنك، شرطة، مستشفى، سلاح...", inline: true },
-      { name: "💡 نصائح القتال", value: "تكتيكات للمبتدئين والمحترفين", inline: true },
-      { name: "📊 معلومات الماب", value: "إحصائيات الخريطة الكاملة", inline: true },
-    )
-    .setFooter({ text: "Block Spin Map | بلوكسبين" })
-    .setTimestamp();
-
-  const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("bloxpin_atm")
-      .setLabel("💳 أماكن الصرافات")
-      .setStyle(ButtonStyle.Success),
-    new ButtonBuilder()
-      .setCustomId("bloxpin_fights")
-      .setLabel("⚔️ مناطق الفايتات")
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId("bloxpin_spots")
-      .setLabel("📍 المواقع المهمة")
-      .setStyle(ButtonStyle.Primary),
-  );
-
-  const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("bloxpin_tips")
-      .setLabel("💡 نصائح القتال")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId("bloxpin_info")
-      .setLabel("📊 معلومات الماب")
-      .setStyle(ButtonStyle.Secondary),
-  );
-
-  return { embeds: [embed], components: [row1, row2] };
+interface SuggestionVote {
+  up: Set<string>;
+  down: Set<string>;
+  authorId: string;
+  text: string;
 }
 
-export async function handleBloxpinButton(interaction: ButtonInteraction): Promise<void> {
-  const id = interaction.customId;
+const suggestions = new Map<string, SuggestionVote>();
 
-  if (id === "bloxpin_atm") {
-    const embed = new EmbedBuilder()
-      .setColor(0x57f287)
-      .setTitle("💳 مواقع الصرافات")
-      .setDescription(`يوجد **${ATM_LOCATIONS.length}** صرافات في ماب بلوكسبين:`)
-      .addFields(ATM_LOCATIONS.map((a) => ({
-        name: a.name,
-        value: `📍 ${a.desc}\n\`${a.coords}\``,
-        inline: false,
-      })))
-      .setFooter({ text: "💡 الصرافات تعمل 24/7 في اللعبة | هذه الرسالة مخفية عليك فقط" })
-      .setTimestamp();
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  else if (id === "bloxpin_fights") {
-    const embed = new EmbedBuilder()
-      .setColor(0xed4245)
-      .setTitle("⚔️ مناطق الفايتات")
-      .setDescription("مناطق القتال مرتّبة من الأعلى خطورة للأقل:")
-      .addFields(FIGHT_ZONES.map((z) => ({
-        name: z.name,
-        value: `${z.danger}\n📝 ${z.desc}\n💡 ${z.tips}`,
-        inline: false,
-      })))
-      .setFooter({ text: "⚠️ كن حذراً في المناطق الحمراء | هذه الرسالة مخفية عليك فقط" })
-      .setTimestamp();
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  else if (id === "bloxpin_spots") {
-    const embed = new EmbedBuilder()
-      .setColor(0xfee75c)
-      .setTitle("📍 المواقع المهمة")
-      .addFields(KEY_SPOTS.map((s) => ({
-        name: s.name,
-        value: `📝 ${s.desc}\n\`${s.coords}\``,
-        inline: false,
-      })))
-      .setFooter({ text: "Block Spin Map | هذه الرسالة مخفية عليك فقط" })
-      .setTimestamp();
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  else if (id === "bloxpin_tips") {
-    const embed = new EmbedBuilder()
-      .setColor(0xeb459e)
-      .setTitle("💡 نصائح القتال")
-      .addFields(FIGHT_TIPS.map((t) => ({ name: t.name, value: t.value, inline: false })))
-      .setFooter({ text: "⚡ تدرّب وستصبح أقوى! | هذه الرسالة مخفية عليك فقط" })
-      .setTimestamp();
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  else if (id === "bloxpin_info") {
+const suggest: Command = {
+  data: new SlashCommandBuilder()
+    .setName("suggest")
+    .setDescription("💡 إرسال اقتراح")
+    .addStringOption((o) => o.setName("اقتراح").setDescription("اكتب اقتراحك").setRequired(true)),
+  async execute(interaction) {
+    if (!interaction.guildId) return;
+    const text = interaction.options.getString("اقتراح", true);
+    const cfg = (await import("../config")).getConfig(interaction.guildId);
+    const channelId = cfg.suggestChannelId ?? interaction.channelId;
+    const channel = interaction.guild?.channels.cache.get(channelId) as any;
+    if (!channel) { await interaction.reply({ content: "❌ قناة الاقتراحات غير محددة.", ephemeral: true }); return; }
     const embed = new EmbedBuilder()
       .setColor(0x5865f2)
-      .setTitle("📊 تفاصيل ماب بلوكسبين")
+      .setTitle("💡 اقتراح جديد")
+      .setDescription(text)
+      .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
       .addFields(
-        { name: "🗺️ حجم الخريطة", value: "1200 × 1200 وحدة", inline: true },
-        { name: "🏙️ المناطق الرئيسية", value: "6 مناطق", inline: true },
-        { name: "💳 عدد الصرافات", value: "6 صرافات", inline: true },
-        { name: "⚔️ مناطق القتال", value: "6 مناطق", inline: true },
-        { name: "🚗 المركبات", value: "سيارات، موتوسيكلات، شاحنات", inline: true },
-        { name: "🏦 البنوك", value: "1 رئيسي + 2 فروع", inline: true },
-        { name: "🌅 دورة الوقت", value: "نهار/ليل كل 30 دقيقة", inline: true },
-        { name: "☁️ الطقس", value: "يتغير عشوائياً", inline: true },
-        { name: "👥 أقصى لاعبين", value: "50 لاعب / سيرفر", inline: true },
+        { name: "👍 موافق", value: "0", inline: true },
+        { name: "👎 غير موافق", value: "0", inline: true },
       )
-      .setFooter({ text: "بلوكسبين | هذه الرسالة مخفية عليك فقط" })
       .setTimestamp();
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-}
-
-const mapPanelCmd: Command = {
-  data: new SlashCommandBuilder()
-    .setName("map")
-    .setDescription("🗺️ بانل ماب بلوكسبين التفاعلي"),
-  async execute(interaction) {
-    const panel = buildMainPanel();
-    await interaction.reply(panel);
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`bloxpin_vote_up`).setLabel("👍 موافق").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId(`bloxpin_vote_down`).setLabel("👎 غير موافق").setStyle(ButtonStyle.Danger),
+    );
+    const msg = await channel.send({ embeds: [embed], components: [row] });
+    suggestions.set(msg.id, { up: new Set(), down: new Set(), authorId: interaction.user.id, text });
+    await interaction.reply({ content: `✅ تم إرسال اقتراحك إلى <#${channelId}>.`, ephemeral: true });
   },
 };
 
-export const bloxpinCommands: Command[] = [mapPanelCmd];
+const setsuggest: Command = {
+  data: new SlashCommandBuilder()
+    .setName("setsuggest")
+    .setDescription("⚙️ تحديد قناة الاقتراحات")
+    .addChannelOption((o) => o.setName("قناة").setDescription("القناة المخصصة للاقتراحات").setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  async execute(interaction) {
+    if (!interaction.guildId) return;
+    const channel = interaction.options.getChannel("قناة", true);
+    (await import("../config")).getConfig(interaction.guildId).suggestChannelId = channel.id;
+    await interaction.reply(`✅ تم تعيين <#${channel.id}> كقناة للاقتراحات.`);
+  },
+};
+
+const giveaway: Command = {
+  data: new SlashCommandBuilder()
+    .setName("giveaway")
+    .setDescription("🎉 إنشاء مسابقة")
+    .addStringOption((o) => o.setName("جائزة").setDescription("الجائزة").setRequired(true))
+    .addIntegerOption((o) => o.setName("مدة").setDescription("المدة بالدقائق").setRequired(true).setMinValue(1).setMaxValue(10080))
+    .addIntegerOption((o) => o.setName("فائزون").setDescription("عدد الفائزين").setRequired(false).setMinValue(1).setMaxValue(20))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  async execute(interaction) {
+    if (!interaction.guild || !interaction.guildId) return;
+    const prize = interaction.options.getString("جائزة", true);
+    const durationMin = interaction.options.getInteger("مدة", true);
+    const winnersCount = interaction.options.getInteger("فائزون") ?? 1;
+    const endTime = Date.now() + durationMin * 60 * 1000;
+    const cfg = (await import("../config")).getConfig(interaction.guildId);
+    const embed = new EmbedBuilder()
+      .setColor(0xfee75c)
+      .setTitle("🎉 مسابقة!")
+      .setDescription(`**الجائزة:** ${prize}`)
+      .addFields(
+        { name: "🏆 عدد الفائزين", value: `${winnersCount}`, inline: true },
+        { name: "⏰ تنتهي", value: `<t:${Math.floor(endTime / 1000)}:R>`, inline: true },
+        { name: "👥 المشاركون", value: "0", inline: true },
+      )
+      .setFooter({ text: "اضغط 🎉 للمشاركة!" })
+      .setTimestamp();
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("giveaway_enter").setLabel("🎉 اشترك").setStyle(ButtonStyle.Primary),
+    );
+    const msg = await (interaction.channel as any).send({ embeds: [embed], components: [row] });
+    cfg.giveaways.set(msg.id, {
+      channelId: msg.channelId,
+      guildId: interaction.guildId,
+      messageId: msg.id,
+      prize,
+      endTime,
+      winnersCount,
+      participants: new Set(),
+      ended: false,
+    });
+    await interaction.reply({ content: `✅ تم إنشاء المسابقة! [اذهب إليها](${msg.url})`, ephemeral: true });
+    setTimeout(async () => {
+      const ga = cfg.giveaways.get(msg.id);
+      if (!ga || ga.ended) return;
+      ga.ended = true;
+      const participants = [...ga.participants];
+      if (participants.length === 0) {
+        await msg.edit({ embeds: [embed.setColor(0xed4245).setTitle("🎉 انتهت المسابقة — لا مشاركين")], components: [] });
+        return;
+      }
+      const winners = participants.sort(() => Math.random() - 0.5).slice(0, ga.winnersCount);
+      const winnerMentions = winners.map((id) => `<@${id}>`).join(", ");
+      await msg.edit({
+        embeds: [embed.setColor(0x57f287).setTitle("🏆 انتهت المسابقة!").setDescription(`**الجائزة:** ${ga.prize}\n\n🏅 **الفائزون:** ${winnerMentions}`)],
+        components: [],
+      });
+      await (msg.channel as any).send({ content: `🎉 مبروك ${winnerMentions}! فزتم بـ **${ga.prize}**!` });
+    }, durationMin * 60 * 1000);
+  },
+};
+
+export async function handleBloxpinButton(interaction: ButtonInteraction): Promise<void> {
+  const { customId, message } = interaction;
+  if (customId === "bloxpin_vote_up" || customId === "bloxpin_vote_down") {
+    const vote = suggestions.get(message.id);
+    if (!vote) { await interaction.reply({ content: "❌ هذا الاقتراح قديم.", ephemeral: true }); return; }
+    const isUp = customId === "bloxpin_vote_up";
+    const userId = interaction.user.id;
+    if (isUp) {
+      if (vote.up.has(userId)) { vote.up.delete(userId); }
+      else { vote.up.add(userId); vote.down.delete(userId); }
+    } else {
+      if (vote.down.has(userId)) { vote.down.delete(userId); }
+      else { vote.down.add(userId); vote.up.delete(userId); }
+    }
+    const embed = EmbedBuilder.from(message.embeds[0])
+      .spliceFields(0, 2,
+        { name: "👍 موافق", value: `${vote.up.size}`, inline: true },
+        { name: "👎 غير موافق", value: `${vote.down.size}`, inline: true },
+      );
+    await interaction.update({ embeds: [embed] });
+  }
+}
+
+export const bloxpinCommands: Command[] = [suggest, setsuggest, giveaway];

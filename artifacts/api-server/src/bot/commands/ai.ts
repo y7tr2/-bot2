@@ -7,22 +7,15 @@ const aiChat: Command = {
   data: new SlashCommandBuilder()
     .setName("ai")
     .setDescription("🤖 اسأل الذكاء الاصطناعي")
-    .addStringOption((o) =>
-      o.setName("سؤال").setDescription("اكتب سؤالك أو رسالتك").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("سؤال").setDescription("اكتب سؤالك أو رسالتك").setRequired(true)),
   async execute(interaction) {
     const question = interaction.options.getString("سؤال", true);
     if (!interaction.guildId) return;
     const cfg = getConfig(interaction.guildId);
-
     if (cfg.aiChannelId && interaction.channelId !== cfg.aiChannelId) {
-      await interaction.reply({
-        content: `❌ أوامر الذكاء الاصطناعي مخصصة في <#${cfg.aiChannelId}> فقط.`,
-        ephemeral: true,
-      });
+      await interaction.reply({ content: `❌ أوامر الذكاء الاصطناعي مخصصة في <#${cfg.aiChannelId}> فقط.`, ephemeral: true });
       return;
     }
-
     await interaction.deferReply();
     const answer = await askAI(question, cfg.respectLevel, interaction.client.user.username);
     const embed = new EmbedBuilder()
@@ -41,10 +34,8 @@ const aiChat: Command = {
 const setchannel: Command = {
   data: new SlashCommandBuilder()
     .setName("setchannel")
-    .setDescription("⚙️ تحديد قناة الذكاء الاصطناعي (ادمن)")
-    .addChannelOption((o) =>
-      o.setName("قناة").setDescription("اختر القناة المخصصة للذكاء الاصطناعي").setRequired(false),
-    )
+    .setDescription("⚙️ تحديد قناة الذكاء الاصطناعي")
+    .addChannelOption((o) => o.setName("قناة").setDescription("القناة المخصصة للذكاء الاصطناعي").setRequired(false))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   async execute(interaction) {
     if (!interaction.guildId) return;
@@ -53,7 +44,7 @@ const setchannel: Command = {
     if (channel) {
       await interaction.reply(`✅ تم تحديد <#${channel.id}> كقناة للذكاء الاصطناعي.`);
     } else {
-      await interaction.reply("✅ تم إلغاء تقييد قناة الذكاء الاصطناعي. يمكن استخدامه في جميع القنوات.");
+      await interaction.reply("✅ تم إلغاء تقييد قناة الذكاء الاصطناعي.");
     }
   },
 };
@@ -62,14 +53,7 @@ const setrespect: Command = {
   data: new SlashCommandBuilder()
     .setName("setrespect")
     .setDescription("⚙️ تحديد مستوى الاحترام (1 قليل أدب ← 5 محترم جداً)")
-    .addIntegerOption((o) =>
-      o
-        .setName("مستوى")
-        .setDescription("اختر من 1 إلى 5")
-        .setRequired(true)
-        .setMinValue(1)
-        .setMaxValue(5),
-    )
+    .addIntegerOption((o) => o.setName("مستوى").setDescription("اختر من 1 إلى 5").setRequired(true).setMinValue(1).setMaxValue(5))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   async execute(interaction) {
     if (!interaction.guildId) return;
@@ -84,9 +68,7 @@ const summarize: Command = {
   data: new SlashCommandBuilder()
     .setName("summarize")
     .setDescription("📝 تلخيص نص")
-    .addStringOption((o) =>
-      o.setName("نص").setDescription("النص المراد تلخيصه").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("نص").setDescription("النص المراد تلخيصه").setRequired(true)),
   async execute(interaction) {
     await interaction.deferReply();
     const text = interaction.options.getString("نص", true);
@@ -108,20 +90,15 @@ const translate: Command = {
     .setName("translate")
     .setDescription("🌐 ترجمة نص")
     .addStringOption((o) => o.setName("نص").setDescription("النص المراد ترجمته").setRequired(true))
-    .addStringOption((o) =>
-      o
-        .setName("لغة")
-        .setDescription("اللغة المستهدفة")
-        .setRequired(true)
-        .addChoices(
-          { name: "الإنجليزية", value: "English" },
-          { name: "العربية", value: "Arabic" },
-          { name: "الفرنسية", value: "French" },
-          { name: "الأوردية", value: "Urdu" },
-          { name: "التركية", value: "Turkish" },
-          { name: "الأندونيسية", value: "Indonesian" },
-        ),
-    ),
+    .addStringOption((o) => o.setName("لغة").setDescription("اللغة المستهدفة").setRequired(true)
+      .addChoices(
+        { name: "الإنجليزية", value: "English" },
+        { name: "العربية", value: "Arabic" },
+        { name: "الفرنسية", value: "French" },
+        { name: "الأوردية", value: "Urdu" },
+        { name: "التركية", value: "Turkish" },
+        { name: "الأندونيسية", value: "Indonesian" },
+      )),
   async execute(interaction) {
     await interaction.deferReply();
     const text = interaction.options.getString("نص", true);
@@ -143,9 +120,7 @@ const explain: Command = {
   data: new SlashCommandBuilder()
     .setName("explain")
     .setDescription("💡 شرح موضوع")
-    .addStringOption((o) =>
-      o.setName("موضوع").setDescription("الموضوع المراد شرحه").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("موضوع").setDescription("الموضوع المراد شرحه").setRequired(true)),
   async execute(interaction) {
     await interaction.deferReply();
     const topic = interaction.options.getString("موضوع", true);
@@ -163,9 +138,7 @@ const correct: Command = {
   data: new SlashCommandBuilder()
     .setName("correct")
     .setDescription("✏️ تصحيح نص (إملاء ونحو)")
-    .addStringOption((o) =>
-      o.setName("نص").setDescription("النص المراد تصحيحه").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("نص").setDescription("النص المراد تصحيحه").setRequired(true)),
   async execute(interaction) {
     await interaction.deferReply();
     const text = interaction.options.getString("نص", true);
@@ -186,9 +159,7 @@ const debate: Command = {
   data: new SlashCommandBuilder()
     .setName("debate")
     .setDescription("🗣️ ناقش البوت في موضوع")
-    .addStringOption((o) =>
-      o.setName("موضوع").setDescription("موضوع النقاش").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("موضوع").setDescription("موضوع النقاش").setRequired(true)),
   async execute(interaction) {
     if (!interaction.guildId) return;
     await interaction.deferReply();
@@ -209,9 +180,7 @@ const story: Command = {
   data: new SlashCommandBuilder()
     .setName("story")
     .setDescription("📖 قصة قصيرة هادفة")
-    .addStringOption((o) =>
-      o.setName("موضوع").setDescription("موضوع القصة").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("موضوع").setDescription("موضوع القصة").setRequired(true)),
   async execute(interaction) {
     await interaction.deferReply();
     const theme = interaction.options.getString("موضوع", true);
@@ -229,9 +198,7 @@ const dua: Command = {
   data: new SlashCommandBuilder()
     .setName("dua")
     .setDescription("🤲 دعاء لموقف معين")
-    .addStringOption((o) =>
-      o.setName("موقف").setDescription("صف موقفك أو حاجتك").setRequired(true),
-    ),
+    .addStringOption((o) => o.setName("موقف").setDescription("صف موقفك أو حاجتك").setRequired(true)),
   async execute(interaction) {
     await interaction.deferReply();
     const situation = interaction.options.getString("موقف", true);

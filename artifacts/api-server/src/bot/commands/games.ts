@@ -8,10 +8,6 @@ const JOKES = [
   "موظف قال لمديره: أنا مريض وتعبان. المدير: أنا شايفك من الكاميرا تلعب! قال: هذا من التعب! 😂",
   "سألت الكمبيوتر إذا كان يحبني. قال: خطأ 404 المشاعر غير موجودة! 💻",
   "واحد سأل الطبيب: كم عمري؟ قال: 40. قال: ما صدقت! قال: أنا أيضاً! 😂",
-  "صاحبي قالي: وش تاكل للإفطار؟ قلت: ما في شي. قال: أنا أيضاً بس أنا نايم! 😂",
-  "طفل سأل أبوه: ليش الشمس تطلع من الشرق؟ قال: لأن الغرب ما يطيقها! 😂",
-  "موظف طلب إجازة قال: عندي ألم في ظهري. المدير: أنا أعرف، من ثقل المسؤوليات اللي ما تسويها! 😂",
-  "واحد طلب من جوجل: كيف أنسى حبيبتي؟ جوجل: هل تقصد حذف السجل؟ 😂",
 ];
 
 const QUOTES = [
@@ -23,8 +19,6 @@ const QUOTES = [
   "من لم يذق مر التعلم ساعة، تجرع ذل الجهل طول حياته — ابن رشد",
   "الوقت كالسيف إن لم تقطعه قطعك",
   "إذا كان الكلام من فضة، فالسكوت من ذهب",
-  "اقرأ كثيراً، فالقراءة نور في ظلمة الجهل",
-  "أفضل ما تستثمره هو تطوير نفسك",
 ];
 
 const WYR_QUESTIONS = [
@@ -32,10 +26,7 @@ const WYR_QUESTIONS = [
   { a: "تعيش بدون إنترنت", b: "تعيش بدون هاتف" },
   { a: "تكون الأذكى في السيرفر", b: "تكون الأقوى في السيرفر" },
   { a: "تأكل نفس الأكل كل يوم", b: "تنام ساعة واحدة فقط كل ليلة" },
-  { a: "تعرف تاريخ وفاتك", b: "تعرف سبب وفاتك" },
-  { a: "تكون مشهوراً ومكروهاً", b: "تكون مجهولاً ومحبوباً" },
   { a: "تتكلم كل اللغات", b: "تعزف كل الآلات الموسيقية" },
-  { a: "ترجع للماضي بدون تغيير", b: "ترى المستقبل بدون تغيير" },
 ];
 
 const SCRAMBLE_WORDS = [
@@ -44,12 +35,9 @@ const SCRAMBLE_WORDS = [
   { word: "السيرفر", hint: "مكان التجمع" },
   { word: "المبرمج", hint: "يكتب الكود" },
   { word: "الذكاء", hint: "صفة عقلية" },
-  { word: "الاصطناعي", hint: "غير طبيعي" },
   { word: "البوتات", hint: "برامج تلقائية" },
-  { word: "الانترنت", hint: "شبكة عالمية" },
 ];
 
-// ─── rps ─────────────────────────────────────────────────
 const rps: Command = {
   data: new SlashCommandBuilder()
     .setName("rps")
@@ -85,7 +73,6 @@ const rps: Command = {
   },
 };
 
-// ─── joke ────────────────────────────────────────────────
 const joke: Command = {
   data: new SlashCommandBuilder()
     .setName("joke")
@@ -97,7 +84,6 @@ const joke: Command = {
   },
 };
 
-// ─── quote ───────────────────────────────────────────────
 const quote: Command = {
   data: new SlashCommandBuilder()
     .setName("quote")
@@ -109,7 +95,6 @@ const quote: Command = {
   },
 };
 
-// ─── fact ────────────────────────────────────────────────
 const fact: Command = {
   data: new SlashCommandBuilder()
     .setName("fact")
@@ -124,8 +109,6 @@ const fact: Command = {
       "🦋 الفراشة تذوق الطعام بقدميها.",
       "🐙 للأخطبوط ثلاثة قلوب وثمانية أذرع ودماغ موزّع في كل ذراع.",
       "🌙 مسافة القمر من الأرض: 384,400 كم.",
-      "🐝 النحل يخبر رفاقه بمكان الرحيق عبر رقصة خاصة تسمى رقصة الاهتزاز.",
-      "💎 الماس يتكون من الكربون تحت ضغط وحرارة هائلة لملايين السنين.",
       "🦈 القرش الأبيض الكبير يمكن أن يحدد قطرة دم في المياه من مسافة 5 كم.",
     ];
     const f = facts[Math.floor(Math.random() * facts.length)];
@@ -134,7 +117,6 @@ const fact: Command = {
   },
 };
 
-// ─── math ────────────────────────────────────────────────
 const math: Command = {
   data: new SlashCommandBuilder()
     .setName("math")
@@ -170,7 +152,6 @@ const math: Command = {
   },
 };
 
-// ─── scramble ────────────────────────────────────────────
 const scramble: Command = {
   data: new SlashCommandBuilder()
     .setName("scramble")
@@ -200,7 +181,6 @@ const scramble: Command = {
   },
 };
 
-// ─── wyr ─────────────────────────────────────────────────
 const wyr: Command = {
   data: new SlashCommandBuilder()
     .setName("wyr")
@@ -220,7 +200,6 @@ const wyr: Command = {
   },
 };
 
-// ─── reverse ─────────────────────────────────────────────
 const reverse: Command = {
   data: new SlashCommandBuilder()
     .setName("reverse")
@@ -240,7 +219,6 @@ const reverse: Command = {
   },
 };
 
-// ─── calculator ──────────────────────────────────────────
 const calculator: Command = {
   data: new SlashCommandBuilder()
     .setName("calc")
@@ -261,16 +239,19 @@ const calculator: Command = {
     const op = interaction.options.getString("عملية", true);
     const b = interaction.options.getNumber("الثاني", true);
     let result: number;
-    if (op === "+" ) result = a + b;
+    if (op === "+") result = a + b;
     else if (op === "-") result = a - b;
     else if (op === "*") result = a * b;
-    else if (op === "/") { if (b === 0) { await interaction.reply({ content: "❌ لا يمكن القسمة على صفر!", ephemeral: true }); return; } result = a / b; }
+    else if (op === "/") {
+      if (b === 0) { await interaction.reply({ content: "❌ لا يمكن القسمة على صفر!", ephemeral: true }); return; }
+      result = a / b;
+    }
     else if (op === "^") result = Math.pow(a, b);
     else result = a % b;
     const embed = new EmbedBuilder()
       .setColor(0x57f287)
       .setTitle("🧮 الحاسبة")
-      .setDescription(`**${a} ${op} ${b} = ${result}**`)
+      .setDescription(`**${a} ${op} ${b} = ${result!}**`)
       .setTimestamp();
     await interaction.reply({ embeds: [embed] });
   },

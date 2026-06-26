@@ -30,7 +30,7 @@ const broadcast: Command = {
         await (ch as any).send({ embeds: [embed] });
         sent++;
       } catch {
-        // skip channels we can't send to
+        // skip
       }
     }
 

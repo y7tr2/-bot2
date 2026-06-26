@@ -3,6 +3,7 @@ import type { Command } from "../commands/types";
 import { handleBloxpinButton } from "../commands/bloxpin";
 import { handleTicketButton } from "../commands/ticket";
 import { handleGiveawayButton } from "../commands/utility";
+import { handleDecorationButton } from "../commands/decoration";
 import { logger } from "../../lib/logger";
 
 export async function onInteractionCreate(
@@ -18,6 +19,8 @@ export async function onInteractionCreate(
         await handleTicketButton(interaction);
       } else if (customId === "giveaway_enter") {
         await handleGiveawayButton(interaction);
+      } else if (customId.startsWith("decorate_confirm_") || customId.startsWith("decorate_cancel_")) {
+        await handleDecorationButton(interaction);
       }
     } catch (err) {
       logger.error({ err, customId }, "Button handler error");

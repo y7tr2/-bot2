@@ -14,7 +14,6 @@ export async function onMessageCreate(message: Message): Promise<void> {
   const isWhitelisted = p.whitelist.has(message.author.id) ||
     member?.roles.cache.some(r => p.whitelist.has(r.id));
 
-  // ── Anti-Spam ────────────────────────────────────────────────────────────
   if (p.antiSpam && !isWhitelisted && member) {
     const muted = await handleAntiSpam(member, message.channelId).catch(() => false);
     if (muted) {
@@ -23,19 +22,19 @@ export async function onMessageCreate(message: Message): Promise<void> {
     }
   }
 
-  // ── Anti-Link ────────────────────────────────────────────────────────────
   if (p.antiLink && !isWhitelisted && LINK_REGEX_EXPORT.test(message.content)) {
     try {
       await message.delete();
-      const warn = await message.channel.send({
-        content: `⚠️ ${message.author} — الروابط غير مسموحة في هذا السيرفر!`,
-      });
-      setTimeout(() => warn.delete().catch(() => {}), 5000);
+      if ("send" in message.channel) {
+        const warn = await (message.channel as any).send({
+          content: `⚠️ ${message.author} — الروابط غير مسموحة في هذا السيرفر!`,
+        });
+        setTimeout(() => warn.delete().catch(() => {}), 5000);
+      }
     } catch { /* no perms */ }
     return;
   }
 
-  // ── Anti-Mention ─────────────────────────────────────────────────────────
   if (p.antiMention && !isWhitelisted && member) {
     const mentionCount = message.mentions.users.size + message.mentions.roles.size +
       (message.mentions.everyone ? 1 : 0);
@@ -43,16 +42,17 @@ export async function onMessageCreate(message: Message): Promise<void> {
       try {
         await message.delete();
         await member.timeout(5 * 60 * 1000, "Anti-Mention: منشنات مفرطة");
-        const warn = await message.channel.send({
-          content: `⚠️ ${message.author} — تم كتمك بسبب المنشنات العشوائية!`,
-        });
-        setTimeout(() => warn.delete().catch(() => {}), 5000);
+        if ("send" in message.channel) {
+          const warn = await (message.channel as any).send({
+            content: `⚠️ ${message.author} — تم كتمك بسبب المنشنات العشوائية!`,
+          });
+          setTimeout(() => warn.delete().catch(() => {}), 5000);
+        }
       } catch { /* no perms */ }
       return;
     }
   }
 
-  // ── AFK check: remove AFK if user sends message ──────────────────────────
   if (cfg.afkUsers.has(message.author.id)) {
     cfg.afkUsers.delete(message.author.id);
     try {
@@ -60,7 +60,6 @@ export async function onMessageCreate(message: Message): Promise<void> {
     } catch { /* ignore */ }
   }
 
-  // ── AFK check: notify if mentioned user is AFK ───────────────────────────
   for (const [, user] of message.mentions.users) {
     const reason = cfg.afkUsers.get(user.id);
     if (reason) {
@@ -71,11 +70,12 @@ export async function onMessageCreate(message: Message): Promise<void> {
     }
   }
 
-  // ── AI channel auto-respond ───────────────────────────────────────────────
   if (cfg.aiChannelId && message.channelId === cfg.aiChannelId) {
     if (message.content.startsWith("/")) return;
     try {
-      if ("sendTyping" in message.channel) await message.channel.sendTyping();
+      if ("sendTyping" in message.channel && typeof (message.channel as any).sendTyping === "function") {
+        await (message.channel as any).sendTyping();
+      }
       const answer = await askAI(message.content, cfg.respectLevel, message.client.user.username);
       const embed = new EmbedBuilder()
         .setColor(0x5865f2)

@@ -5,7 +5,9 @@ import { startBot } from "./bot/index";
 const rawPort = process.env["PORT"];
 
 if (!rawPort) {
-  throw new Error("PORT environment variable is required but was not provided.");
+  throw new Error(
+    "PORT environment variable is required but was not provided.",
+  );
 }
 
 const port = Number(rawPort);
@@ -19,9 +21,10 @@ app.listen(port, (err) => {
     logger.error({ err }, "Error listening on port");
     process.exit(1);
   }
+
   logger.info({ port }, "Server listening");
 });
 
 startBot().catch((err) => {
-  logger.error({ err }, "Failed to start Discord bot");
+  logger.error({ err }, "Bot failed to start");
 });

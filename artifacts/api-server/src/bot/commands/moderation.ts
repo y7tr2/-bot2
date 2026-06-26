@@ -1,9 +1,4 @@
-import {
-  SlashCommandBuilder,
-  EmbedBuilder,
-  PermissionFlagsBits,
-  GuildMember,
-} from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits, GuildMember } from "discord.js";
 import type { Command } from "./types";
 import { addWarning, getWarnings, clearWarnings as clearW } from "../config";
 
@@ -21,8 +16,7 @@ const kick: Command = {
     if (!target.kickable) { await interaction.reply({ content: "❌ لا أستطيع طرد هذا العضو.", ephemeral: true }); return; }
     await target.kick(reason);
     const embed = new EmbedBuilder().setColor(0xed4245).setTitle("👢 تم الطرد")
-      .addFields({ name: "العضو", value: target.user.tag }, { name: "السبب", value: reason })
-      .setTimestamp();
+      .addFields({ name: "العضو", value: target.user.tag }, { name: "السبب", value: reason }).setTimestamp();
     await interaction.reply({ embeds: [embed] });
   },
 };
@@ -43,8 +37,7 @@ const ban: Command = {
     if (!target.bannable) { await interaction.reply({ content: "❌ لا أستطيع حظر هذا العضو.", ephemeral: true }); return; }
     await target.ban({ reason, deleteMessageSeconds: days * 86400 });
     const embed = new EmbedBuilder().setColor(0xed4245).setTitle("🔨 تم الحظر")
-      .addFields({ name: "العضو", value: target.user.tag }, { name: "السبب", value: reason })
-      .setTimestamp();
+      .addFields({ name: "العضو", value: target.user.tag }, { name: "السبب", value: reason }).setTimestamp();
     await interaction.reply({ embeds: [embed] });
   },
 };

@@ -42,11 +42,10 @@ export async function startBot(): Promise<void> {
   client.on("messageCreate", onMessageCreate);
   client.on("messageDelete", onMessageDelete);
 
-  // ── Anti-Nuke events ─────────────────────────────────────────────────────
   client.on("channelDelete", async (channel) => {
-    if (!channel.guild) return;
+    if (!("guild" in channel) || !channel.guild) return;
     try {
-      const logs = await channel.guild.fetchAuditLogs({ limit: 1, type: 12 }); // CHANNEL_DELETE
+      const logs = await channel.guild.fetchAuditLogs({ limit: 1, type: 12 });
       const entry = logs.entries.first();
       if (!entry?.executor) return;
       await handleAntiNuke(channel.guild.id, entry.executor.id, channel.guild);
@@ -55,7 +54,7 @@ export async function startBot(): Promise<void> {
 
   client.on("roleDelete", async (role) => {
     try {
-      const logs = await role.guild.fetchAuditLogs({ limit: 1, type: 32 }); // ROLE_DELETE
+      const logs = await role.guild.fetchAuditLogs({ limit: 1, type: 32 });
       const entry = logs.entries.first();
       if (!entry?.executor) return;
       await handleAntiNuke(role.guild.id, entry.executor.id, role.guild);
@@ -64,7 +63,7 @@ export async function startBot(): Promise<void> {
 
   client.on("guildBanAdd", async (ban) => {
     try {
-      const logs = await ban.guild.fetchAuditLogs({ limit: 1, type: 22 }); // MEMBER_BAN_ADD
+      const logs = await ban.guild.fetchAuditLogs({ limit: 1, type: 22 });
       const entry = logs.entries.first();
       if (!entry?.executor) return;
       await handleAntiNuke(ban.guild.id, entry.executor.id, ban.guild);

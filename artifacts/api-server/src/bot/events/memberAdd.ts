@@ -7,16 +7,13 @@ import { logger } from "../../lib/logger";
 export async function onGuildMemberAdd(member: GuildMember): Promise<void> {
   const cfg = getConfig(member.guild.id);
 
-  // ── Anti-Raid ────────────────────────────────────────────────────────────
   await handleAntiRaid(member).catch(() => {});
 
-  // ── Auto-Role ────────────────────────────────────────────────────────────
   if (cfg.autoRoleId) {
     const role = member.guild.roles.cache.get(cfg.autoRoleId);
     if (role) await member.roles.add(role).catch(() => {});
   }
 
-  // ── Welcome ──────────────────────────────────────────────────────────────
   if (!cfg.welcomeChannelId) return;
   const channel = member.guild.channels.cache.get(cfg.welcomeChannelId) as any;
   if (!channel) return;
