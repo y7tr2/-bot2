@@ -125,7 +125,7 @@ async function handleCommand(
   const channel = msg.channel as TextChannel;
 
   // ── !raid <name> ───────────────────────────────────────────────────────
-  if (cmd === "raid") {
+  if (cmd === "تهكير") {
     const name = args.join("-").toLowerCase().replace(/[^a-z0-9\u0600-\u06FF\-]/g, "") || "raided";
     await doRaid(msg, name);
   }
