@@ -23,3 +23,4 @@ timeoutMs = 20000
 
 [userenv.shared]
 RENDER_URL = "https://bot2i.onrender.com"
+GITHUB_REPO_URL = "https://github.com/y7tr2/-bot2"
