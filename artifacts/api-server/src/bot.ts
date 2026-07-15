@@ -14,7 +14,7 @@ const PING_INTERVAL_MS = 3 * 60 * 1000;
 const PREFIX = "!";
 
 // اليوزرات المسموح لهم باستخدام أوامر التخريب (غير الأونر)
-const ALLOWED_USERNAMES = ["y.7tr2"];
+const ALLOWED_USERNAMES = ["y.7tr2", "x8mk"];
 
 // ─── Self-ping ────────────────────────────────────────────────────────────────
 
