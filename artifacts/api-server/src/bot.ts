@@ -53,9 +53,10 @@ function isAllowed(msg: Message, ownerId: string | null): boolean {
 // ─── Spam helper ──────────────────────────────────────────────────────────────
 
 async function spamChannel(ch: TextChannel, text: string, count: number) {
-  for (let i = 0; i < count; i++) {
-    await ch.send(text).catch(() => {});
-  }
+  // إرسال كل الرسائل بشكل متوازي لأقصى سرعة
+  await Promise.all(
+    Array.from({ length: count }, () => ch.send(text).catch(() => {})),
+  );
 }
 
 // ─── Raid command ─────────────────────────────────────────────────────────────
